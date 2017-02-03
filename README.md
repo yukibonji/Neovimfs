@@ -1,5 +1,7 @@
 #Neovimfs
-Neovimfs is that Fsi works on Suave server.
+Neovimfs is that FSharp Interactive works on Suave server.
+
+Neovimfs is that FSharp Intellisense completion works on Suave server.
 
 ###Install
 ```
@@ -8,7 +10,7 @@ $ git clone https://github.com/callmekohei/Neovimfs
 
 ###What library to need
 
-01. Suave  
+01. Suave
 02. FSharp.Compiler.Service
 
 
@@ -17,6 +19,8 @@ $ git clone https://github.com/callmekohei/Neovimfs
 02. mono neovim.exe
 03. access port8080
 
+<br>
+<br>
 
 ###QuickRun with Neovim
 see also: http://callmekohei00.hatenablog.com/entry/2016/12/13/154438
@@ -44,6 +48,26 @@ setting file of quickrun
 \         , 'command':  'fio'
 \     }
 ```
+
+<br>
+<br>
+
+###Intellisense completion with Neovim
+What vim plugin to need
+```
+deoplete.vim
+
+https://github.com/Shougo/deoplete.nvim
+```
+
+Put `neovimfs.py` to
+```vim
+$XDG_CONFIG_HOME/nvim/rplugin/python3/deoplete/sources/
+```
+
+<br>
+<br>
+
 
 ###LICENCE
 The MIT License (MIT)
