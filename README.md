@@ -23,7 +23,18 @@ $ git clone https://github.com/callmekohei/Neovimfs
 <br>
 
 ###QuickRun with Neovim
+
+![alt text](./pic/quickrun.png)
+
+
 see also: http://callmekohei00.hatenablog.com/entry/2016/12/13/154438
+
+What vim plugin to need
+```
+vim-quickrun
+
+https://github.com/thinca/vim-quickrun
+```
 
 create `fio.bash`
 ```bash
@@ -53,6 +64,9 @@ setting file of quickrun
 <br>
 
 ###Intellisense completion with Neovim
+
+![alt text](./pic/deoplete.png)
+
 What vim plugin to need
 ```
 deoplete.vim
