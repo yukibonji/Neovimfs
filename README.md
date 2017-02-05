@@ -2,6 +2,10 @@
 
 Neovimfs is that Fsi and intellisense works on Suave server.
 
+<br>
+
+![alt text](./pic/suave.png)
+
 ###Install
 ```
 $ git clone https://github.com/callmekohei/Neovimfs
