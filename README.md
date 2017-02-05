@@ -27,6 +27,8 @@ init.vim
 autocmd BufRead,BufNewFile *.fsx set filetype=fsharp
 ```
 
+<br>
+
 ###QuickRun with Neovimfs
 
 ![alt text](./pic/quickrun2.png)
@@ -61,7 +63,6 @@ quickrun configuration
 \     }
 ```
 
-<br>
 <br>
 
 ###Intellisense completion with Neovimfs
