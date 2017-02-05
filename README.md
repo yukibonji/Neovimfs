@@ -1,7 +1,6 @@
 #Neovimfs
-Neovimfs is that FSharp Interactive works on Suave server.
 
-Neovimfs is that FSharp Intellisense completion works on Suave server.
+Neovimfs is that Fsi and intellisense works on Suave server.
 
 ###Install
 ```
