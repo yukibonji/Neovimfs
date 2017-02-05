@@ -40,20 +40,14 @@ module Util =
     // open FSharp.Data ---> ["FSharp"; "Data"]
     let openString (source: string)  =
 
-        // source.Split('\n')
-        Regex.Split(source,"\n|\<|\>")
-        |> Array.filter ( fun (s:string) -> s.Contains("open") && not (s.Contains("//")) )
+        Regex.Split(source,"\n")
+        |> Array.filter ( fun s -> Regex.Match(s,"open").Success && not (Regex.Match(s,"//").Success ) )
         |> Array.map ( fun s ->
-            System.Text.RegularExpressions.Regex.Replace( s, "^.*open\s","")
-            |> fun str ->
-                if    str.Contains(".")
-                then  str.Split(' ')
-                        |> Array.last
-                        |> fun (s:string) ->
-                            if    s.Contains(".")
-                            then  s.Split('.') |> Array.toList
-                            else  [s]
-                else  [str])
+            Regex.Replace( s, "^.*open\s","")
+            |> fun s ->
+                if    Regex.Match(s,"\.").Success
+                then  Regex.Split(s,"\.") |> Array.toList
+                else  [s] )
         |> Array.toList
 
 
