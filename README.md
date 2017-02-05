@@ -19,7 +19,7 @@ $ git clone https://github.com/callmekohei/Neovimfs
 
 ###Configuration
 
-Fit your `fis.exe` location in `neovimfs.fsx`
+Fit your `fsi.exe` location in `neovimfs.fsx`
 
 ```fsharp
 [<EntryPoint>]
