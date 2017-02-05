@@ -14,8 +14,8 @@ $ git clone https://github.com/callmekohei/Neovimfs
 
 
 ###How to use
-01. compile `neovim.fsx` file
-02. mono neovim.exe
+01. compile `neovim.fsx`
+02. mono `neovim.exe ( compiled from neovim.fsx ) `
 03. access port8080
 
 <br>
