@@ -8,7 +8,7 @@ Neovimfs is that FSharp Intellisense completion works on Suave server.
 $ git clone https://github.com/callmekohei/Neovimfs
 ```
 
-###What library to need
+###Required
 
 01. Suave
 02. FSharp.Compiler.Service
@@ -22,19 +22,15 @@ $ git clone https://github.com/callmekohei/Neovimfs
 <br>
 <br>
 
-###QuickRun with Neovim
+###QuickRun with Neovimfs
 
 ![alt text](./pic/quickrun.png)
 
 
-see also: http://callmekohei00.hatenablog.com/entry/2016/12/13/154438
 
-What vim plugin to need
-```
-vim-quickrun
-
-https://github.com/thinca/vim-quickrun
-```
+Required
+- vim-quickrun
+    - https://github.com/thinca/vim-quickrun
 
 create `fio.bash`
 ```bash
@@ -67,17 +63,17 @@ setting file of quickrun
 
 ![alt text](./pic/deoplete.png)
 
-What vim plugin to need
-```
-deoplete.vim
+Required
 
-https://github.com/Shougo/deoplete.nvim
-```
+- deoplete.vim
 
-Put `neovimfs.py` to
-```vim
-$XDG_CONFIG_HOME/nvim/rplugin/python3/deoplete/sources/
-```
+    - https://github.com/Shougo/deoplete.nvim
+
+- deoplete-fsharp
+
+    - https://github.com/callmekohei/deoplete-fsharp
+
+
 
 <br>
 <br>

@@ -1,7 +1,6 @@
 !.gitignore
 !README.md
 !neovimfs.fsx
-!neovimfs.py
 !pic/*
 .paket/
 bin/
