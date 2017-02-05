@@ -23,7 +23,7 @@ $ git clone https://github.com/callmekohei/Neovimfs
 
 ###QuickRun with Neovimfs
 
-![alt text](./pic/quickrun.png)
+![alt text](./pic/quickRun.png)
 
 
 
