@@ -21,6 +21,8 @@ $ git clone https://github.com/callmekohei/Neovimfs
 <br>
 <br>
 
+---
+
 ###Neovim configuration
 init.vim
 ```vim
