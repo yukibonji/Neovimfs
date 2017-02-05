@@ -58,7 +58,7 @@ setting file of quickrun
 <br>
 <br>
 
-###Intellisense completion with Neovim
+###Intellisense completion with Neovimfs
 
 ![alt text](./pic/deoplete.png)
 
