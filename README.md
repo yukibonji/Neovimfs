@@ -88,7 +88,7 @@ let g:quickrun_config = {
 
 ###Intellisense completion with Neovimfs
 
-![alt text](./pic/deoplete2.png)
+![alt text](./pic/deoplete3.png)
 
 Required
 
