@@ -21,6 +21,12 @@ $ git clone https://github.com/callmekohei/Neovimfs
 <br>
 <br>
 
+###Neovim configuration
+init.vim
+```vim
+autocmd BufRead,BufNewFile *.fsx set filetype=fsharp
+```
+
 ###QuickRun with Neovimfs
 
 ![alt text](./pic/quickrun2.png)
@@ -47,7 +53,7 @@ $ chmod 777 fio
 $ sudo mv fio /usr/local/bin
 ```
 
-setting file of quickrun
+quickrun configuration
 ```vim
 \     , 'fsharp': {
 \           'exec'   :  [ '%c %s:p:r.fsx']
@@ -72,7 +78,11 @@ Required
 
     - https://github.com/callmekohei/deoplete-fsharp
 
-
+deoplete configuration
+```vim
+let g:deoplete#enable_at_startup = 1
+let g:deoplete#max_list = 500
+```
 
 <br>
 <br>
