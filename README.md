@@ -94,6 +94,25 @@ let g:deoplete#max_list = 500
 ```
 
 <br>
+
+###Syntax highlight of FSharp
+
+![alt text](./pic/syntax.png)
+
+FSharp syntax highlight configuration
+```vim
+# create syntax folder
+$ cd $XDG_CONFIG_HOME/nvim
+$ mkdir syntax
+
+# download fsharp.vim file
+$ cd syntax
+$ wget https://raw.githubusercontent.com/fsharp/vim-fsharp/master/syntax/fsharp.vim
+```
+
+
+
+<br>
 <br>
 
 
