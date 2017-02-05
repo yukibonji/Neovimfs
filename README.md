@@ -63,10 +63,12 @@ $ sudo mv fio /usr/local/bin
 
 quickrun configuration
 ```vim
+let g:quickrun_config = {
 \     , 'fsharp': {
 \           'exec'   :  [ '%c %s:p:r.fsx']
 \         , 'command':  'fio'
 \     }
+\ }
 ```
 
 <br>
