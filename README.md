@@ -17,6 +17,19 @@ $ git clone https://github.com/callmekohei/Neovimfs
 02. FSharp.Compiler.Service
 
 
+###Configuration
+
+Fit your `fis.exe` location in `neovimfs.fsx`
+
+```fsharp
+[<EntryPoint>]
+let main argv =
+    let fsiPath = "/path/to/your/location/fsi.exe"
+    startWebServer defaultConfig (app fsiPath)
+    0
+```
+
+
 ###How to use
 01. compile `neovimfs.fsx`
 02. mono `neovimfs.exe ( compiled from neovimfs.fsx ) `
