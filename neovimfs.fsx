@@ -40,7 +40,8 @@ module Util =
     // open FSharp.Data ---> ["FSharp"; "Data"]
     let openString (source: string)  =
 
-        source.Split('\n')
+        // source.Split('\n')
+        Regex.Split(source,"\n|\<|\>")
         |> Array.filter ( fun (s:string) -> s.Contains("open") && not (s.Contains("//")) )
         |> Array.map ( fun s ->
             System.Text.RegularExpressions.Regex.Replace( s, "^.*open\s","")
@@ -56,35 +57,60 @@ module Util =
         |> Array.toList
 
 
+    let angleBracket s =
+        if    Regex.Match(   s, "typeof<.*>\.").Success
+        then  Regex.Replace( s, "<.*>\.", ""  )
+        elif  Regex.Match(   s, "(?<=.*\<).*" ).Success
+        then  Regex.Replace( s, "typeof<", "" ) |> fun s -> Regex.Replace( s , "\.$", "")
+        else  ""
+
+
     let qualifiedAndPartialNames (fp:string) (line:string)  =
 
-            // "System.String."  ---> ["System"; "String"]
-            let wordList =
-                if    line.Contains(".")
-                then  line.Split(' ')
-                      |> Array.last
-                      |> fun (s:string) -> s.Remove(s.Length - 1)
-                      |> fun (s:string) ->
-                          if    s.Contains(".")
-                          then  s.Split('.') |> Array.toList
-                          else  [s]
-                else  [line]
+        // typeof<System.       ---> ["System"]
+        // typeof<System.Text   ---> ["System";  Text"]
+        // typeof<System.Math>. ---> ["typeof"]
+        // "System"             ---> ["System"]
+        // "System."            ---> ["System"]
+        // "System.Text"        ---> ["System"; "Text"]
+        // "System.Text."       ---> ["System"; "Text"]
 
-            let partialName = wordList.[List.length wordList - 1]
+        let f s =
+            if    Regex.Match(   s, "\.$").Success
+            then  Regex.Replace( s, "\.$", "")
+                |> fun s ->  Regex.Split(   s, "\." )
+                |> Array.toList
+            else  Regex.Split(   s, "\." )
+                |> Array.toList
 
-            if      List.length wordList > 1
-            then    [ ( wordList , "") ]
-            else    let defaultSets    = [ ( [], wordList.[0]) ; ( wordList , "" ) ]
-                    let defaultLibrary = [ ["Microsoft";"FSharp";"Collections"] ; ["Microsoft";"FSharp";"Core"] ]
-                    let requireLibrary = openString(fp)
-                    let l = match List.isEmpty requireLibrary with
-                            | true  -> defaultLibrary                  |> List.map ( fun l -> l @ [partialName] )
-                            | false -> defaultLibrary @ requireLibrary |> List.map ( fun l -> l @ [partialName] )
 
-                    let emptyStringsList   = [ for i in 1 .. (List.length l) -> "" ]
-                    let qualifingNamesList = (l,emptyStringsList) ||> List.zip
+        let wordList  =
+            line
+            |> fun line -> Regex.Split( line , " " )
+            |> Array.last
+            |> fun (s:string) ->
+                if    Regex.Match( s, "<" ).Success
+                then  angleBracket s |> fun s -> f s
+                elif  Regex.Match( s, "\." ).Success
+                then  f s
+                else  [s]
 
-                    qualifingNamesList @ defaultSets
+
+        let partialName = wordList.[List.length wordList - 1]
+
+        if      List.length wordList > 1
+        then    [ ( wordList , "") ]
+        else    let defaultSets    = [ ( [], wordList.[0]) ; ( wordList , "" ) ]
+                let defaultLibrary = [ ["Microsoft";"FSharp";"Collections"] ; ["Microsoft";"FSharp";"Core"] ]
+                let requireLibrary = openString(fp)
+                let l = match List.isEmpty requireLibrary with
+                        | true  -> defaultLibrary                  |> List.map ( fun l -> l @ [partialName] )
+                        | false -> defaultLibrary @ requireLibrary |> List.map ( fun l -> l @ [partialName] )
+
+                let emptyStringsList   = [ for i in 1 .. (List.length l) -> "" ]
+                let qualifingNamesList = (l,emptyStringsList) ||> List.zip
+
+                qualifingNamesList @ defaultSets
 
 
 module FsharpInteractive =
@@ -220,6 +246,7 @@ module Suave =
             let mutable i , flag = 1 , true
 
             while flag do
+
                 let   info: FSharpDeclarationListInfo = FsChecker(fsc, fp, input,inputLines).decls(int(row), int(col), lst.[i-1] )
 
                 if    info.Items.Length = 0
