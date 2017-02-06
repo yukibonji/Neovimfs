@@ -73,7 +73,6 @@ module Util =
         // "System.Text."         ---> [| "System"; "Text" |]
         // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]
 
-
         let f s : string array =
             if    Regex.Match(   s, "\.$").Success
             then  Regex.Replace( s, "\.$", "") |> fun s ->  Regex.Split(   s, "\." )
@@ -89,7 +88,8 @@ module Util =
                 elif  Regex.Match( s, "\." ).Success
                 then  f s
                 else  [|s|]
-            // |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
+            |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
+
 
         // [| "System"; "Text" |]  ---> "Text"
         let partialName : string = wordArr.[Array.length wordArr - 1]
