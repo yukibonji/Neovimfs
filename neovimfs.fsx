@@ -37,20 +37,21 @@ module Util =
         sb.ToString()
 
 
-    // open FSharp.Data ---> ["FSharp"; "Data"]
+    // open FSharp.Data ---> [|"FSharp"; "Data"|]
     let openString (source: string)  =
-
         Regex.Split(source,"\n")
         |> Array.filter ( fun s -> Regex.Match(s,"open").Success && not (Regex.Match(s,"//").Success ) )
         |> Array.map ( fun s ->
             Regex.Replace( s, "^.*open\s","")
             |> fun s ->
                 if    Regex.Match(s,"\.").Success
-                then  Regex.Split(s,"\.") |> Array.toList
-                else  [s] )
-        |> Array.toList
+                then  Regex.Split(s,"\.")
+                else  [|s|] )
 
 
+    // typeof<System.       ---> System
+    // typeof<System.Text   ---> System.Text
+    // typeof<System.Math>. ---> typeof
     let angleBracket s =
         if    Regex.Match(   s, "typeof<.*>\.").Success
         then  Regex.Replace( s, "<.*>\.", ""  )
@@ -59,26 +60,26 @@ module Util =
         else  ""
 
 
-    let qualifiedAndPartialNames (fp:string) (line:string)  =
+    // [| [||] ; "tmp" |]
+    // [| [|"Microsoft";"FSharp";"Collections";"List"|] ; "" |]
+    let qualifiedAndPartialNames (fp:string) (line:string) : (string array * string) array  =
 
-        // typeof<System.       ---> ["System"]
-        // typeof<System.Text   ---> ["System";  Text"]
-        // typeof<System.Math>. ---> ["typeof"]
-        // "System"             ---> ["System"]
-        // "System."            ---> ["System"]
-        // "System.Text"        ---> ["System"; "Text"]
-        // "System.Text."       ---> ["System"; "Text"]
+        // typeof<System.         ---> [| "System" |]
+        // typeof<System.Text     ---> [| "System";  Text" |]
+        // typeof<System.Math>.   ---> [| "typeof" |]
+        // "System"               ---> [| "System" |]
+        // "System."              ---> [| "System" |]
+        // "System.Text"          ---> [| "System"; "Text" |]
+        // "System.Text."         ---> [| "System"; "Text" |]
+        // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]
 
-        let f s =
+
+        let f s : string array =
             if    Regex.Match(   s, "\.$").Success
-            then  Regex.Replace( s, "\.$", "")
-                |> fun s ->  Regex.Split(   s, "\." )
-                |> Array.toList
+            then  Regex.Replace( s, "\.$", "") |> fun s ->  Regex.Split(   s, "\." )
             else  Regex.Split(   s, "\." )
-                |> Array.toList
 
-
-        let wordList  =
+        let wordArr: string array  =
             line
             |> fun line -> Regex.Split( line , " " )
             |> Array.last
@@ -87,24 +88,26 @@ module Util =
                 then  angleBracket s |> fun s -> f s
                 elif  Regex.Match( s, "\." ).Success
                 then  f s
-                else  [s]
+                else  [|s|]
+            // |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
 
+        // [| "System"; "Text" |]  ---> "Text"
+        let partialName : string = wordArr.[Array.length wordArr - 1]
 
-        let partialName = wordList.[List.length wordList - 1]
-
-        if      List.length wordList > 1
-        then    [ ( wordList , "") ]
-        else    let defaultSets    = [ ( [], wordList.[0]) ; ( wordList , "" ) ]
-                let defaultLibrary = [ ["Microsoft";"FSharp";"Collections"] ; ["Microsoft";"FSharp";"Core"] ]
+        // [| [|"Microsoft";"FSharp";"Collections";"List"|] ; "" |]
+        if      Array.length wordArr > 1
+        then    [| ( wordArr , "") |]
+        else    let defaultSets    = [| ( [||], wordArr.[0]) ; ( wordArr , "" ) |]
+                let defaultLibrary = [| [|"Microsoft";"FSharp";"Collections"|] ; [|"Microsoft";"FSharp";"Core"|] |]
                 let requireLibrary = openString(fp)
-                let l = match List.isEmpty requireLibrary with
-                        | true  -> defaultLibrary                  |> List.map ( fun l -> l @ [partialName] )
-                        | false -> defaultLibrary @ requireLibrary |> List.map ( fun l -> l @ [partialName] )
+                let arr = match Array.isEmpty requireLibrary with
+                            | true  -> defaultLibrary                             |> Array.map ( fun arr -> Array.append arr  [| partialName |] )
+                            | false -> Array.append defaultLibrary requireLibrary |> Array.map ( fun arr -> Array.append arr  [| partialName |] )
 
-                let emptyStringsList   = [ for i in 1 .. (List.length l) -> "" ]
-                let qualifingNamesList = (l,emptyStringsList) ||> List.zip
+                let emptyStringsArr   = [| for i in 1 .. (Array.length arr) -> "" |]
+                let qualifingNamesArr = (arr,emptyStringsArr) ||> Array.zip
 
-                qualifingNamesList @ defaultSets
+                Array.append qualifingNamesArr defaultSets
 
 
 module FsharpInteractive =
@@ -182,9 +185,9 @@ module FSharpAutoComplete =
             | FSharpCheckFileAnswer.Succeeded(res) -> res
             | res -> failwithf "Parsing did not finish... (%A)" res
 
-        member x.decls (row:int, col:int, lst) =
+        member x.decls (row:int, col:int, arr:(string array * string)) =
             checkFileResults.GetDeclarationListInfo
-                (Some parseFileResults, row, col, inputLines.[row - 1], (fst lst), (snd lst), fun _ -> false)
+                (Some parseFileResults, row, col, inputLines.[row - 1], (fst arr) |> Array.toList, (snd arr), fun _ -> false)
                 |> Async.RunSynchronously
 
 
@@ -225,23 +228,23 @@ module Suave =
             sw.AutoFlush <- true
             Console.SetOut(tw)
 
-            let str2  = System.Web.HttpUtility.UrlDecode(str)
-            let arr   = str2.Split( [|','|] , 5 )
+            let arr  = ( System.Web.HttpUtility.UrlDecode(str) ) |> fun s -> Regex(",,,").Split(s,5)
 
             let row   = arr.[0]
             let col   = arr.[1]
             let line  = arr.[2]
             let fp    = arr.[3]
             let input = arr.[4]
-            let inputLines = input.Split('\n')
+            let inputLines = Regex.Split(input,"\n")
 
-            let lst = qualifiedAndPartialNames fp line
-            let len = lst.Length
+            // [| [| [|"Microsoft";"FSharp";"Collections";"List"|] ; "" |] ; [| [|"Microsoft";"FSharp";"Core";"List"|] ; "" |] |]
+            let arr = qualifiedAndPartialNames fp line
+            let len = arr.Length
             let mutable i , flag = 1 , true
 
             while flag do
 
-                let   info: FSharpDeclarationListInfo = FsChecker(fsc, fp, input,inputLines).decls(int(row), int(col), lst.[i-1] )
+                let   info: FSharpDeclarationListInfo = FsChecker(fsc, fp, input,inputLines).decls(int(row), int(col), arr.[i-1] )
 
                 if    info.Items.Length = 0
                 then  i <- i + 1
