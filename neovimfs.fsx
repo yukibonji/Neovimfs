@@ -1,3 +1,9 @@
+// ===========================================================================
+//  FILE    : neovimfs.fsx
+//  AUTHOR  : callmekohei <callmekohei at gmail.com>
+//  License : MIT license
+// ===========================================================================
+
 open System
 open System.IO
 open System.Text
@@ -92,8 +98,7 @@ module Util =
 
 
         // [| "System"; "Text" |]  ---> "Text"
-        // let partialName : string = wordArr.[Array.length wordArr - 1]
-        let partialName : string = Array.last wordArr 
+        let partialName : string = Array.last wordArr
 
         // [| [|"Microsoft";"FSharp";"Collections";"List"|] ; "" |]
         if      Array.length wordArr > 1
