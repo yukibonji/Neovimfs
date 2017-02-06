@@ -44,15 +44,17 @@ module Util =
 
 
     // open FSharp.Data ---> [|"FSharp"; "Data"|]
-    let openString (source: string)  =
-        Regex.Split(source,"\n")
-        |> Array.filter ( fun s -> Regex.Match(s,"open").Success && not (Regex.Match(s,"//").Success ) )
-        |> Array.map ( fun s ->
-            Regex.Replace( s, "^.*open\s","")
-            |> fun s ->
-                if    Regex.Match(s,"\.").Success
-                then  Regex.Split(s,"\.")
-                else  [|s|] )
+    let openString (s:string) =
+        Regex.Split(s,"\n")
+        |> Array.choose ( fun s ->
+            match s with
+            | s when Regex.Match(s,"open").Success && not (Regex.Match(s,"//").Success) ->
+                Some ( Regex.Replace( s, "^.*open\s","")
+                       |> fun s ->
+                            if    Regex.Match(s,"\.").Success
+                            then  Regex.Split(s,"\.")
+                            else  [|s|] ) 
+            | _ -> None ) 
 
 
     // typeof<System.       ---> System
