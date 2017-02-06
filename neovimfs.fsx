@@ -228,7 +228,7 @@ module Suave =
             sw.AutoFlush <- true
             Console.SetOut(tw)
 
-            let arr  = ( System.Web.HttpUtility.UrlDecode(str) ) |> fun s -> Regex(",,,").Split(s,5)
+            let arr  = ( System.Web.HttpUtility.UrlDecode(str) ) |> fun s -> Regex(",@,").Split(s,5)
 
             let row   = arr.[0]
             let col   = arr.[1]
