@@ -92,7 +92,8 @@ module Util =
 
 
         // [| "System"; "Text" |]  ---> "Text"
-        let partialName : string = wordArr.[Array.length wordArr - 1]
+        // let partialName : string = wordArr.[Array.length wordArr - 1]
+        let partialName : string = Array.last wordArr 
 
         // [| [|"Microsoft";"FSharp";"Collections";"List"|] ; "" |]
         if      Array.length wordArr > 1
