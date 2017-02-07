@@ -144,10 +144,10 @@ module private FSharpAutoComplete =
                        |> fun s ->
                             if    Regex.Match(s,"\.").Success
                             then  Regex.Split(s,"\.")
-                            else  [|s|] ) 
+                            else  [|s|] )
             | _ -> None )
 
-    
+
     let private nameSpaceArrayImpl (s:string) : string array =
         if    Regex.Match(   s, "\.$").Success
         then  Regex.Replace( s, "\.$", "") |> fun s ->  Regex.Split(   s, "\." )
@@ -156,7 +156,7 @@ module private FSharpAutoComplete =
 
     // System.Text            ---> [| "System"; "Text" |]
     // System.Text.           ---> [| "System"; "Text" |]
-    // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]   
+    // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]
     let private nameSpaceArray (s:string) : string array =
         s
         |> fun s -> Regex.Split( s , " " )
@@ -172,7 +172,7 @@ module private FSharpAutoComplete =
 
     // [| ( [|"Microsoft";"FSharp";"Collections";"List"|] ; "" ) ; ( [||] , "List" ) |]
     let public qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
-        
+
         let wordArr     : string [] = nameSpaceArray line
         let partialName : string    = Array.last wordArr
 
@@ -195,8 +195,41 @@ module private FSharpAutoComplete =
                 Array.append qualifingNamesArr defaultSets
 
 
+    let intellisense (fsc:FSharpChecker) (s:string) : unit =
+
+        let tmp = System.Web.HttpUtility.UrlDecode(s)
+
+        if    Regex.Matches(tmp,",@,").Count <> 4
+        then  stdout.WriteLine("Do not use ,@," )
+        else
+
+            let arr = Regex(",@,").Split(tmp,5)
+
+            let row         = arr.[0]
+            let col         = arr.[1]
+            let line        = arr.[2]
+            let filePath    = arr.[3]
+            let source      = arr.[4]
+
+            let arr = qualifiedNamesAndPartialName filePath line
+            let len = arr.Length
+            let mutable i , flag = 1 , true
+
+            while flag do
+
+                let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
+
+                if    info.Items.Length = 0
+                then  i <- i + 1
+                      if   len < i
+                      then flag <- false
+                      ()
+                else  flag <- false
+                      info.Items |> Array.iter ( fun x -> stdout.WriteLine(x.Name) )
+
+
 module private Suave =
-    
+
     open FsharpInteractive
     open FSharpAutoComplete
 
@@ -234,29 +267,7 @@ module private Suave =
             sw.AutoFlush <- true
             Console.SetOut(tw)
 
-            let arr  = ( System.Web.HttpUtility.UrlDecode(str) ) |> fun s -> Regex(",@,").Split(s,5)
-
-            let row         = arr.[0]
-            let col         = arr.[1]
-            let line        = arr.[2]
-            let filePath    = arr.[3]
-            let source      = arr.[4]
-
-            let arr = qualifiedNamesAndPartialName filePath line
-            let len = arr.Length
-            let mutable i , flag = 1 , true
-
-            while flag do
-
-                let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
-
-                if    info.Items.Length = 0
-                then  i <- i + 1
-                      if   len < i
-                      then flag <- false
-                      ()
-                else  flag <- false
-                      info.Items |> Array.iter ( fun x -> stdout.WriteLine(x.Name) )
+            intellisense fsc str
 
             use sr = new System.IO.StreamReader(ms)
             ms.Position <- int64 0
