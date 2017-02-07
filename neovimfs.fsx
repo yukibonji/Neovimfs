@@ -197,13 +197,14 @@ module private FSharpIntellisence =
 
     let public intellisense (fsc:FSharpChecker) (s:string) : unit =
 
-        let tmp = System.Web.HttpUtility.UrlDecode(s)
+        let tmp       = System.Web.HttpUtility.UrlDecode(s)
+        let separater = ",@,"
 
-        if    Regex.Matches(tmp,",@,").Count <> 4
-        then  stdout.WriteLine("Do not use ,@," )
+        if    Regex.Matches(tmp,separater).Count <> 4
+        then  stdout.WriteLine("Do not use " + separater )
         else
 
-            let arr = Regex(",@,").Split(tmp,5)
+            let arr = Regex(separater).Split(tmp,5)
 
             let row         = arr.[0]
             let col         = arr.[1]
