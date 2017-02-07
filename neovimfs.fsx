@@ -97,7 +97,7 @@ module private FsharpInteractive =
                 |> Array.iter ( fun s -> stdout.WriteLine(s) )
 
 
-module private FSharpAutoComplete =
+module private FSharpIntellisence =
 
     type public FsChecker( checker:FSharpChecker, file:string, input:string ) =
 
@@ -171,7 +171,7 @@ module private FSharpAutoComplete =
 
 
     // [| ( [|"Microsoft";"FSharp";"Collections";"List"|] ; "" ) ; ( [||] , "List" ) |]
-    let public qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
+    let private qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
 
         let wordArr     : string [] = nameSpaceArray line
         let partialName : string    = Array.last wordArr
@@ -195,7 +195,7 @@ module private FSharpAutoComplete =
                 Array.append qualifingNamesArr defaultSets
 
 
-    let intellisense (fsc:FSharpChecker) (s:string) : unit =
+    let public intellisense (fsc:FSharpChecker) (s:string) : unit =
 
         let tmp = System.Web.HttpUtility.UrlDecode(s)
 
@@ -231,7 +231,7 @@ module private FSharpAutoComplete =
 module private Suave =
 
     open FsharpInteractive
-    open FSharpAutoComplete
+    open FSharpIntellisence
 
 
     let private evalScript (fsi:Fsi) =
