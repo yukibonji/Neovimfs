@@ -22,10 +22,10 @@ open Suave.Filters
 open Suave.RequestErrors
 
 
-module FsharpInteractive =
+module private FsharpInteractive =
 
     // Wrap text at arbitrary place
-    let orikaeshi (str:string) (returnPoint:int) =
+    let private orikaeshi (str:string) (returnPoint:int) =
 
         let sb = new System.Text.StringBuilder("")
         let mutable len = 0
@@ -42,7 +42,7 @@ module FsharpInteractive =
 
         sb.ToString()
 
-    type Fsi (fsiPath:string) =
+    type public Fsi (fsiPath:string) =
 
         // Intialize output and input streams
         let sbOut      = new StringBuilder()
@@ -58,7 +58,7 @@ module FsharpInteractive =
         let fsiSession = FsiEvaluationSession.Create(fsiConfig, allArgs, inStream, outStream, errStream)
 
 
-        member this.EvalScript (fp:string) =
+        member public this.EvalScript (fp:string) =
 
             let fp = System.Web.HttpUtility.UrlDecode(fp)
             let result, warnings = fsiSession.EvalScriptNonThrowing fp
@@ -97,9 +97,9 @@ module FsharpInteractive =
                 |> Array.iter ( fun s -> stdout.WriteLine(s) )
 
 
-module FSharpAutoComplete =
+module private FSharpAutoComplete =
 
-    type FsChecker( checker:FSharpChecker, file:string, input:string ) =
+    type public FsChecker( checker:FSharpChecker, file:string, input:string ) =
 
         let projOptions =
             checker.GetProjectOptionsFromScript(file, input)
@@ -114,7 +114,7 @@ module FSharpAutoComplete =
             | FSharpCheckFileAnswer.Succeeded(res) -> res
             | res -> failwithf "Parsing did not finish... (%A)" res
 
-        member x.decls ( row:int, col:int, inputLines: string array, arr:(string array * string) ) =
+        member public x.decls ( row:int, col:int, inputLines: string array, arr:(string array * string) ) =
             checkFileResults.GetDeclarationListInfo
                 (Some parseFileResults, row, col, inputLines.[row - 1], (fst arr) |> Array.toList, (snd arr), fun _ -> false)
                 |> Async.RunSynchronously
@@ -123,7 +123,7 @@ module FSharpAutoComplete =
     // typeof<System.       ---> System
     // typeof<System.Text   ---> System.Text
     // typeof<System.Math>. ---> typeof
-    let angleBracket (s:string) : string =
+    let private angleBracket (s:string) : string =
         if    Regex.Match(   s, "typeof<.*>\.").Success
         then  Regex.Replace( s, "<.*>\.", ""  )
         elif  Regex.Match(   s, "(?<=.*\<).*" ).Success
@@ -135,7 +135,7 @@ module FSharpAutoComplete =
     // open System.Text
     // //open System
     // [|[|"FSharp"; "Data"|]; [|"System"; "Text"|]|]
-    let openString (s:string)  =
+    let private openString (s:string)  =
         Regex.Split(s,"\n")
         |> Array.choose ( fun s ->
             match s with
@@ -148,7 +148,7 @@ module FSharpAutoComplete =
             | _ -> None )
 
     
-    let nameSpaceArrayImpl (s:string) : string array =
+    let private nameSpaceArrayImpl (s:string) : string array =
         if    Regex.Match(   s, "\.$").Success
         then  Regex.Replace( s, "\.$", "") |> fun s ->  Regex.Split(   s, "\." )
         else  Regex.Split(   s, "\." )
@@ -157,7 +157,7 @@ module FSharpAutoComplete =
     // System.Text            ---> [| "System"; "Text" |]
     // System.Text.           ---> [| "System"; "Text" |]
     // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]   
-    let nameSpaceArray (s:string) : string array =
+    let private nameSpaceArray (s:string) : string array =
         s
         |> fun s -> Regex.Split( s , " " )
         |> Array.last
@@ -171,7 +171,7 @@ module FSharpAutoComplete =
 
 
     // [| ( [|"Microsoft";"FSharp";"Collections";"List"|] ; "" ) ; ( [||] , "List" ) |]
-    let qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
+    let public qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
         
         let wordArr     : string [] = nameSpaceArray line
         let partialName : string    = Array.last wordArr
@@ -195,13 +195,13 @@ module FSharpAutoComplete =
                 Array.append qualifingNamesArr defaultSets
 
 
-module Suave =
+module private Suave =
     
     open FsharpInteractive
     open FSharpAutoComplete
 
 
-    let evalScript (fsi:Fsi) =
+    let private evalScript (fsi:Fsi) =
 
         GET >=> pathScan "/evalScript/%s" ( fun fp ->
 
@@ -222,7 +222,7 @@ module Suave =
             ; OK (sr.ReadToEnd()) )
 
 
-    let autoComplete (fsc:FSharpChecker) =
+    let private autoComplete (fsc:FSharpChecker) =
 
         GET >=> pathScan "/autoComplete/%s" ( fun str ->
 
@@ -266,7 +266,7 @@ module Suave =
             ; OK (sr.ReadToEnd()) )
 
 
-    let app (fsiPath:string) =
+    let private app (fsiPath:string) =
 
         let fsi = Fsi(fsiPath)
         let fsc = FSharpChecker.Create()
@@ -277,7 +277,7 @@ module Suave =
 
 
     [<EntryPointAttribute>]
-    let main argv =
+    let private main argv =
         let fsiPath = "/usr/local/Cellar/mono/4.6.2.7/lib/mono/fsharp/fsi.exe"
         startWebServer defaultConfig (app fsiPath)
         0
