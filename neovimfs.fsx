@@ -114,9 +114,9 @@ module private FSharpAutoComplete =
             | FSharpCheckFileAnswer.Succeeded(res) -> res
             | res -> failwithf "Parsing did not finish... (%A)" res
 
-        member public x.decls ( row:int, col:int, inputLines: string array, arr:(string array * string) ) =
+        member public x.decls ( row:int, col:int, line: string, arr:(string array * string) ) =
             checkFileResults.GetDeclarationListInfo
-                (Some parseFileResults, row, col, inputLines.[row - 1], (fst arr) |> Array.toList, (snd arr), fun _ -> false)
+                (Some parseFileResults, row, col, line, (fst arr) |> Array.toList, (snd arr), fun _ -> false)
                 |> Async.RunSynchronously
 
 
@@ -241,7 +241,6 @@ module private Suave =
             let line        = arr.[2]
             let filePath    = arr.[3]
             let source      = arr.[4]
-            let sourceLines = Regex.Split(source,"\n")
 
             let arr = qualifiedNamesAndPartialName filePath line
             let len = arr.Length
@@ -249,7 +248,7 @@ module private Suave =
 
             while flag do
 
-                let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), sourceLines, arr.[i-1] )
+                let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
 
                 if    info.Items.Length = 0
                 then  i <- i + 1
