@@ -35,6 +35,15 @@ let main argv =
 02. mono `neovimfs.exe ( compiled from neovimfs.fsx ) `
 03. access port8080
 
+###Terminate neovimfs.exe
+```
+// check suave server pid
+$ lsof -i :8080
+
+// terminate suae server
+$ kill (pid)
+```
+
 <br>
 <br>
 
