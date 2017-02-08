@@ -289,7 +289,6 @@ module private Suave =
 
     [<EntryPointAttribute>]
     let private main argv =
-        // let fsiPath = "/usr/local/Cellar/mono/4.6.2.7/lib/mono/fsharp/fsi.exe"
         let fsiPath = argv.[0]
         startWebServer defaultConfig (app fsiPath)
         0
