@@ -1,5 +1,5 @@
 #Neovimfs
-
+ 
 Neovimfs is that Fsi and intellisense works on Suave server.
 
 <br>
@@ -33,8 +33,11 @@ $ kill (pid)
 
 <br>
 <br>
-
+<br>
+ 
 ---
+
+#Noevimfs with text editor as Neovim
 
 ###Neovim configuration
 init.vim
