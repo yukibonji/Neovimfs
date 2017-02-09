@@ -37,7 +37,7 @@ $ kill (pid)
  
 ---
 
-#Noevimfs with text editor as Neovim
+#Noevimfs with Neovim
 
 ###Neovim configuration
 init.vim
