@@ -27,7 +27,7 @@ $ git clone https://github.com/callmekohei/Neovimfs
 // check suave server pid
 $ lsof -i :8080
 
-// terminate suae server
+// terminate suave server
 $ kill (pid)
 ```
 
