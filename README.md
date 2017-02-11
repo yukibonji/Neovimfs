@@ -1,5 +1,5 @@
 #Neovimfs
- 
+
 Neovimfs is that Fsi and intellisense works on Suave server.
 
 <br>
@@ -34,7 +34,7 @@ $ kill (pid)
 <br>
 <br>
 <br>
- 
+
 ---
 
 #Noevimfs with Neovim
@@ -87,7 +87,7 @@ let g:quickrun_config = {
 
 ###Intellisense completion with Neovimfs
 
-![alt text](./pic/deoplete3.png)
+![alt text](./pic/deoplete4.png)
 
 Required
 

@@ -14,6 +14,14 @@ open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.SourceCodeServices
 open Microsoft.FSharp.Compiler.Interactive.Shell
 
+#r @"./packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
+open Newtonsoft.Json
+
+#r @"./packages/FsPickler/lib/net45/FsPickler.dll"
+#r @"./packages/FsPickler.Json/lib/net45/FsPickler.Json.dll"
+open MBrace.FsPickler
+open MBrace.FsPickler.Json
+
 #r @"./packages/Suave/lib/net40/Suave.dll"
 open Suave
 open Suave.Operators
@@ -195,7 +203,16 @@ module private FSharpIntellisence =
                 Array.append qualifingNamesArr defaultSets
 
 
+    type CompletionData = { word : string; hint: string list list  }
+
     let public intellisense (fsc:FSharpChecker) (s:string) : unit =
+
+        let extractGroupTexts = function
+            | FSharpToolTipElement.None                    -> []
+            | FSharpToolTipElement.Single (a,b)            -> [a]
+            | FSharpToolTipElement.SingleParameter (a,b,c) -> []
+            | FSharpToolTipElement.Group xs                -> xs |> List.map fst
+            | FSharpToolTipElement.CompositionError s      -> [s]
 
         let tmp       = System.Web.HttpUtility.UrlDecode(s)
         let separater = ",@,"
@@ -203,6 +220,8 @@ module private FSharpIntellisence =
         if    Regex.Matches(tmp,separater).Count <> 4
         then  stdout.WriteLine("Do not use " + separater )
         else
+
+            let sb = new System.Text.StringBuilder("")
 
             let arr = Regex(separater).Split(tmp,5)
 
@@ -226,7 +245,16 @@ module private FSharpIntellisence =
                       then flag <- false
                       ()
                 else  flag <- false
-                      info.Items |> Array.iter ( fun x -> stdout.WriteLine(x.Name) )
+
+                      let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
+
+                      info.Items
+                      |> Array.iter ( fun x ->
+                            let dt = { word = x.Name; hint = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                            sb.AppendLine(jsonSerializer.PickleToString(dt) )
+                            |> ignore)
+
+            stdout.WriteLine(sb.ToString())
 
 
 module private Suave =
@@ -253,14 +281,14 @@ module private Suave =
             ms.Position <- int64 0
             ()
 
-            ; OK (sr.ReadToEnd()) )
+            ; OK ( sr.ReadToEnd() ) )
 
 
     let private autoComplete (fsc:FSharpChecker) =
 
         GET >=> pathScan "/autoComplete/%s" ( fun str ->
 
-            // switch stdout to memory stream
+            //switch stdout to memory stream
             use ms = new MemoryStream()
             use sw = new StreamWriter(ms)
             use tw = TextWriter.Synchronized(sw)
