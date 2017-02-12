@@ -33,7 +33,7 @@ open Suave.RequestErrors
 module private FsharpInteractive =
 
     // Wrap text at arbitrary place
-    let private orikaeshi (str:string) (returnPoint:int) =
+    let private orikaeshi (str:string) (returnPoint:int) : string =
 
         let sb = new System.Text.StringBuilder("")
         let mutable len = 0
@@ -66,7 +66,7 @@ module private FsharpInteractive =
         let fsiSession = FsiEvaluationSession.Create(fsiConfig, allArgs, inStream, outStream, errStream)
 
 
-        member public this.EvalScript (fp:string) =
+        member public this.EvalScript (fp:string) : unit =
 
             let fp = System.Web.HttpUtility.UrlDecode(fp)
             let result, warnings = fsiSession.EvalScriptNonThrowing fp
@@ -80,10 +80,12 @@ module private FsharpInteractive =
 
                 exn.Message + "\n" |> stdout.WriteLine
 
+                let sb = new System.Text.StringBuilder()
+
                 warnings
                 |> Array.map ( fun w ->
 
-                    let sb = new System.Text.StringBuilder()
+                    sb.Clear() |> ignore
 
                     let severity = match w.Severity with
                                    | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Error   -> "error"
@@ -203,9 +205,10 @@ module private FSharpIntellisence =
                 Array.append qualifingNamesArr defaultSets
 
 
-    type CompletionData = { word : string; hint: string list list  }
+    type JsonFormat = { word : string; info: string list list  }
 
-    let public intellisense (fsc:FSharpChecker) (s:string) : unit =
+
+    let public intellisense (fsc:FSharpChecker) (s:string) : string =
 
         let extractGroupTexts = function
             | FSharpToolTipElement.None                    -> []
@@ -214,47 +217,43 @@ module private FSharpIntellisence =
             | FSharpToolTipElement.Group xs                -> xs |> List.map fst
             | FSharpToolTipElement.CompositionError s      -> [s]
 
-        let tmp       = System.Web.HttpUtility.UrlDecode(s)
-        let separater = ",@,"
+        let tmp            = System.Web.HttpUtility.UrlDecode(s)
+        let separater      = ",@,"
+        let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
-        if    Regex.Matches(tmp,separater).Count <> 4
-        then  stdout.WriteLine("Do not use " + separater )
+        if      Regex.Matches(tmp,separater).Count <> 4
+        then    jsonSerializer.PickleToString( { word = "Do not use " + separater; info = [[""]] } )
         else
+                let sb = new System.Text.StringBuilder("")
 
-            let sb = new System.Text.StringBuilder("")
+                let arr = Regex(separater).Split(tmp,5)
 
-            let arr = Regex(separater).Split(tmp,5)
+                let row       = arr.[0]
+                let col       = arr.[1]
+                let line      = arr.[2]
+                let filePath  = arr.[3]
+                let source    = arr.[4]
 
-            let row         = arr.[0]
-            let col         = arr.[1]
-            let line        = arr.[2]
-            let filePath    = arr.[3]
-            let source      = arr.[4]
+                let arr = qualifiedNamesAndPartialName filePath line
+                let len = arr.Length
+                let mutable i , flag = 1 , true
 
-            let arr = qualifiedNamesAndPartialName filePath line
-            let len = arr.Length
-            let mutable i , flag = 1 , true
+                while flag do
 
-            while flag do
+                    let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
 
-                let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
+                    if    info.Items.Length = 0
+                    then  i <- i + 1
+                          if   len < i
+                          then flag <- false
+                          ()
+                    else  flag <- false
+                          info.Items
+                          |> Array.iter ( fun x ->
+                              let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                              sb.AppendLine(jsonSerializer.PickleToString(dt) ) |> ignore)
 
-                if    info.Items.Length = 0
-                then  i <- i + 1
-                      if   len < i
-                      then flag <- false
-                      ()
-                else  flag <- false
-
-                      let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
-
-                      info.Items
-                      |> Array.iter ( fun x ->
-                            let dt = { word = x.Name; hint = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                            sb.AppendLine(jsonSerializer.PickleToString(dt) )
-                            |> ignore)
-
-            stdout.WriteLine(sb.ToString())
+                sb.ToString()
 
 
 module private Suave =
@@ -268,6 +267,7 @@ module private Suave =
         GET >=> pathScan "/evalScript/%s" ( fun fp ->
 
             // switch stdout to memory stream
+            // because fsiSession.EvalScriptNonThrowing's normal output to stdout
             use ms = new MemoryStream()
             use sw = new StreamWriter(ms)
             use tw = TextWriter.Synchronized(sw)
@@ -279,30 +279,14 @@ module private Suave =
 
             use sr = new System.IO.StreamReader(ms)
             ms.Position <- int64 0
-            ()
 
-            ; OK ( sr.ReadToEnd() ) )
+            OK ( sr.ReadToEnd() ) )
 
 
     let private autoComplete (fsc:FSharpChecker) =
 
         GET >=> pathScan "/autoComplete/%s" ( fun str ->
-
-            //switch stdout to memory stream
-            use ms = new MemoryStream()
-            use sw = new StreamWriter(ms)
-            use tw = TextWriter.Synchronized(sw)
-
-            sw.AutoFlush <- true
-            Console.SetOut(tw)
-
-            intellisense fsc str
-
-            use sr = new System.IO.StreamReader(ms)
-            ms.Position <- int64 0
-            ()
-
-            ; OK (sr.ReadToEnd()) )
+             OK ( intellisense fsc str ) )
 
 
     let private app (fsiPath:string) =
