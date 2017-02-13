@@ -232,13 +232,14 @@ module private FSharpIntellisence =
                 let filePath  = arr.[3]
                 let source    = arr.[4]
 
-                let arr = qualifiedNamesAndPartialName filePath line
-                let len = arr.Length
+                let arr     = qualifiedNamesAndPartialName filePath line
+                let len     = arr.Length
+                let checker = FsChecker(fsc, filePath, source)
                 let mutable i , flag = 1 , true
-
+                
                 while flag do
 
-                    let   info: FSharpDeclarationListInfo = FsChecker(fsc, filePath, source).decls(int(row), int(col), line, arr.[i-1] )
+                    let   info: FSharpDeclarationListInfo = checker.decls(int(row), int(col), line, arr.[i-1] )
 
                     if    info.Items.Length = 0
                     then  i <- i + 1
