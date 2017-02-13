@@ -169,7 +169,7 @@ module private FSharpIntellisence =
             | FSharpToolTipElement.Group xs                -> xs |> List.map fst
             | FSharpToolTipElement.CompositionError s      -> [s]
 
-        let tmp:           = System.Web.HttpUtility.UrlDecode(s)
+        let tmp            = System.Web.HttpUtility.UrlDecode(s)
         let separater      = ",@,"
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
