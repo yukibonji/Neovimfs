@@ -130,27 +130,6 @@ module private FSharpIntellisence =
                 |> Async.RunSynchronously
 
 
-    // open FSharp.Data
-    // open System.Text
-    // //open System
-    // [|[|"FSharp"; "Data"|]; [|"System"; "Text"|]|]
-
-    let private openString ( s:string )  =
-        s.Split('\n')
-        |> Array.choose( fun (s:string) ->
-            match s with
-            | s when s.Contains("open") && not ( s.Contains("//") ) ->
-                Some ( s.Trim().Replace( "open ", "" ).Split('.') )
-            | _ -> None )
-
-
-    // typeof<System.       ---> System
-    // typeof<System.Text   ---> System.Text
-    // typeof<System.Math>. ---> typeof
-    // System.Text            ---> [| "System"; "Text" |]
-    // System.Text.           ---> [| "System"; "Text" |]
-    // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]
-
     let private angleBracket ( s:string ) :string =
         s.Split([|'<';'>'|])
         |> fun arr ->
@@ -160,7 +139,7 @@ module private FSharpIntellisence =
 
     let private nameSpaceArrayImpl ( s:string) :string array =
         s.Split('.')
-        |> fun arr -> 
+        |> fun arr ->
             if    Array.last arr = ""
             then  Array.splitAt (arr.Length - 1) arr |> fst
             else  arr
@@ -175,32 +154,7 @@ module private FSharpIntellisence =
             elif  s.Contains(".")
             then  nameSpaceArrayImpl s
             else  [|s|]
-        |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
-
-
-    // [| ( [|"Microsoft";"FSharp";"Collections";"List"|] ; "" ) ; ( [||] , "List" ) |]
-    let private qualifiedNamesAndPartialName (fp:string) (line:string) : (string array * string) array  =
-
-        let wordArr     : string [] = nameSpaceArray line
-        let partialName : string    = Array.last wordArr
-
-        if      Array.length wordArr > 1
-        then    [| ( wordArr , "") |]
-        else
-                let defaultSets    = [| ( [||], wordArr.[0]) ; ( wordArr , "" ) |]
-                let defaultLibrary = [| [|"Microsoft";"FSharp";"Collections"|] ; [|"Microsoft";"FSharp";"Core"|] |]
-                let requireLibrary = openString(fp)
-
-                let arr = match Array.isEmpty requireLibrary with
-                            | true  -> defaultLibrary
-                                       |> Array.map ( fun arr -> Array.append arr  [| partialName |] )
-                            | false -> Array.append defaultLibrary requireLibrary
-                                       |> Array.map ( fun arr -> Array.append arr  [| partialName |] )
-
-                let emptyStringsArr   = [| for i in 1 .. (Array.length arr) -> "" |]
-                let qualifingNamesArr = (arr,emptyStringsArr) ||> Array.zip
-
-                Array.append qualifingNamesArr defaultSets
+        |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") ) /// TODO: change string method
 
 
     type JsonFormat = { word : string; info: string list list  }
@@ -215,16 +169,16 @@ module private FSharpIntellisence =
             | FSharpToolTipElement.Group xs                -> xs |> List.map fst
             | FSharpToolTipElement.CompositionError s      -> [s]
 
-        let tmp            = System.Web.HttpUtility.UrlDecode(s)
+        let tmp:           = System.Web.HttpUtility.UrlDecode(s)
         let separater      = ",@,"
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
-        if      Regex.Matches(tmp,separater).Count <> 4
+        if      Regex.Matches(tmp,separater).Count <> 4 /// TODO: change string method
         then    jsonSerializer.PickleToString( { word = "Do not use " + separater; info = [[""]] } )
         else
                 let sb = new System.Text.StringBuilder("")
 
-                let arr = Regex(separater).Split(tmp,5)
+                let arr = Regex(separater).Split(tmp,5) /// TODO: change string method
 
                 let row       = arr.[0]
                 let col       = arr.[1]
@@ -232,25 +186,10 @@ module private FSharpIntellisence =
                 let filePath  = arr.[3]
                 let source    = arr.[4]
 
-                let arr     = qualifiedNamesAndPartialName filePath line
-                let len     = arr.Length
-                let checker = FsChecker(fsc, filePath, source)
-                let mutable i , flag = 1 , true
-                
-                while flag do
-
-                    let   info: FSharpDeclarationListInfo = checker.decls(int(row), int(col), line, arr.[i-1] )
-
-                    if    info.Items.Length = 0
-                    then  i <- i + 1
-                          if   len < i
-                          then flag <- false
-                          ()
-                    else  flag <- false
-                          info.Items
-                          |> Array.iter ( fun x ->
-                              let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                              sb.AppendLine(jsonSerializer.PickleToString(dt) ) |> ignore)
+                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( nameSpaceArray line, "") ) ).Items
+                |> Array.iter ( fun x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
 
                 sb.ToString()
 
@@ -285,7 +224,7 @@ module private Suave =
     let private autoComplete (fsc:FSharpChecker) =
 
         GET >=> pathScan "/autoComplete/%s" ( fun str ->
-             OK ( intellisense fsc str ) )
+            OK ( intellisense fsc str ) )
 
 
     let private app (fsiPath:string) =
