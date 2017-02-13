@@ -130,51 +130,49 @@ module private FSharpIntellisence =
                 |> Async.RunSynchronously
 
 
-    // typeof<System.       ---> System
-    // typeof<System.Text   ---> System.Text
-    // typeof<System.Math>. ---> typeof
-    let private angleBracket (s:string) : string =
-        if    Regex.Match(   s, "typeof<.*>\.").Success
-        then  Regex.Replace( s, "<.*>\.", ""  )
-        elif  Regex.Match(   s, "(?<=.*\<).*" ).Success
-        then  Regex.Replace( s, "typeof<", "" ) |> fun s -> Regex.Replace( s , "\.$", "")
-        else  ""
-
-
     // open FSharp.Data
     // open System.Text
     // //open System
     // [|[|"FSharp"; "Data"|]; [|"System"; "Text"|]|]
-    let private openString (s:string)  =
-        Regex.Split(s,"\n")
-        |> Array.choose ( fun s ->
+
+    let private openString ( s:string )  =
+        s.Split('\n')
+        |> Array.choose( fun (s:string) ->
             match s with
-            | s when Regex.Match(s,"open").Success && not (Regex.Match(s,"//").Success) ->
-                Some ( Regex.Replace( s, "^.*open\s","")
-                       |> fun s ->
-                            if    Regex.Match(s,"\.").Success
-                            then  Regex.Split(s,"\.")
-                            else  [|s|] )
+            | s when s.Contains("open") && not ( s.Contains("//") ) ->
+                Some ( s.Trim().Replace( "open ", "" ).Split('.') )
             | _ -> None )
 
 
-    let private nameSpaceArrayImpl (s:string) : string array =
-        if    Regex.Match(   s, "\.$").Success
-        then  Regex.Replace( s, "\.$", "") |> fun s ->  Regex.Split(   s, "\." )
-        else  Regex.Split(   s, "\." )
-
-
+    // typeof<System.       ---> System
+    // typeof<System.Text   ---> System.Text
+    // typeof<System.Math>. ---> typeof
     // System.Text            ---> [| "System"; "Text" |]
     // System.Text.           ---> [| "System"; "Text" |]
     // Regex(",").Split(s,3)  ---> [| "Regex" ; "Split"|]
+
+    let private angleBracket ( s:string ) :string =
+        s.Split([|'<';'>'|])
+        |> fun arr ->
+           if     Array.last arr = "."
+           then   Array.head arr
+           else   (Array.tail arr).[0]
+
+    let private nameSpaceArrayImpl ( s:string) :string array =
+        s.Split('.')
+        |> fun arr -> 
+            if    Array.last arr = ""
+            then  Array.splitAt (arr.Length - 1) arr |> fst
+            else  arr
+
     let private nameSpaceArray (s:string) : string array =
         s
-        |> fun s -> Regex.Split( s , " " )
+        |> fun s -> s.Split(' ')
         |> Array.last
-        |> fun (s:string) ->
-            if    Regex.Match( s, "<" ).Success
-            then  angleBracket s |> fun s -> nameSpaceArrayImpl s
-            elif  Regex.Match( s, "\." ).Success
+        |> fun ( s:string) ->
+            if    s.Contains("<")
+            then  angleBracket s |> nameSpaceArrayImpl
+            elif  s.Contains(".")
             then  nameSpaceArrayImpl s
             else  [|s|]
         |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
