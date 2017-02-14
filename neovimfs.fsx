@@ -14,9 +14,6 @@ open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.SourceCodeServices
 open Microsoft.FSharp.Compiler.Interactive.Shell
 
-#r @"./packages/FSharp.Data/lib/net40/FSharp.Data.dll"
-open FSharp.Data
-
 #r @"./packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
 open Newtonsoft.Json
 
