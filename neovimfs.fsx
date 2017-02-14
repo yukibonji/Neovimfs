@@ -14,6 +14,9 @@ open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.SourceCodeServices
 open Microsoft.FSharp.Compiler.Interactive.Shell
 
+#r @"./packages/FSharp.Data/lib/net40/FSharp.Data.dll"
+open FSharp.Data
+
 #r @"./packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
 open Newtonsoft.Json
 
@@ -154,13 +157,17 @@ module private FSharpIntellisence =
             elif  s.Contains(".")
             then  nameSpaceArrayImpl s
             else  [|s|]
-        |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") ) /// TODO: change string method
+        |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
 
 
     type JsonFormat = { word : string; info: string list list  }
 
+    let public intellisense (fsc:FSharpChecker) (ctx: HttpContext)  =
 
-    let public intellisense (fsc:FSharpChecker) (s:string) : string =
+        let extractJson key =
+            match ctx.request.formData key with
+            | Choice1Of2 x -> x
+            | _            -> ""
 
         let extractGroupTexts = function
             | FSharpToolTipElement.None                    -> []
@@ -169,29 +176,21 @@ module private FSharpIntellisence =
             | FSharpToolTipElement.Group xs                -> xs |> List.map fst
             | FSharpToolTipElement.CompositionError s      -> [s]
 
-        let tmp            = System.Web.HttpUtility.UrlDecode(s)
-        let separater      = ",@,"
+        let row       = extractJson "row"
+        let col       = extractJson "col"
+        let line      = extractJson "line"
+        let filePath  = extractJson "filePath"
+        let source    = extractJson "source"
+
+        let sb             = new System.Text.StringBuilder("")
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
-        if      Regex.Matches(tmp,separater).Count <> 4 /// TODO: change string method
-        then    jsonSerializer.PickleToString( { word = "Do not use " + separater; info = [[""]] } )
-        else
-                let sb = new System.Text.StringBuilder("")
+        ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( nameSpaceArray line, "") ) ).Items
+        |> Array.iter ( fun x ->
+            let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+            sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
 
-                let arr = Regex(separater).Split(tmp,5) /// TODO: change string method
-
-                let row       = arr.[0]
-                let col       = arr.[1]
-                let line      = arr.[2]
-                let filePath  = arr.[3]
-                let source    = arr.[4]
-
-                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( nameSpaceArray line, "") ) ).Items
-                |> Array.iter ( fun x ->
-                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                    sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
-
-                sb.ToString()
+        sb.ToString()
 
 
 module private Suave =
@@ -220,11 +219,10 @@ module private Suave =
 
             OK ( sr.ReadToEnd() ) )
 
-
     let private autoComplete (fsc:FSharpChecker) =
 
-        GET >=> pathScan "/autoComplete/%s" ( fun str ->
-            OK ( intellisense fsc str ) )
+        POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
+            OK (intellisense fsc ctx ) ctx )
 
 
     let private app (fsiPath:string) =
