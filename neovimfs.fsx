@@ -156,7 +156,6 @@ module private FSharpIntellisence =
             else  [|s|]
         |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
 
-
     type JsonFormat = { word : string; info: string list list  }
 
     let public intellisense (fsc:FSharpChecker) (ctx: HttpContext)  =
@@ -182,10 +181,24 @@ module private FSharpIntellisence =
         let sb             = new System.Text.StringBuilder("")
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
-        ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( nameSpaceArray line, "") ) ).Items
-        |> Array.iter ( fun x ->
-            let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-            sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+        if    line.Contains(".")
+        then  ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, (nameSpaceArray line ,"" ) ) ).Items
+              |> Array.iter ( fun x ->
+                  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                  sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+        else  line.Split(' ')
+              |> Array.last
+              |> fun s -> s.Replace("[<","")
+              |> fun s ->
+                  if      s.Length = 1
+                  then
+                          let info = ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s ) ) ).Items
+                          info
+                          |> Array.iter ( fun x ->
+                              if    x.Name.Substring(0,1).ToLower() = s.ToLower()
+                              then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                                    sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+                  else    ()
 
         sb.ToString()
 
