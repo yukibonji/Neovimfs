@@ -196,7 +196,7 @@ module private FSharpIntellisence =
             let s = Array.last arr 
             ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s.Replace("[<","") ) ) ).Items
             |> Array.iter ( fun x ->
-                if    x.Name.Contains( "Attribute" )
+                if    x.Name.Contains( "Attribute" ) && x.Name.Substring(0,1).ToLower() = s.ToLower() 
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
 
@@ -207,6 +207,8 @@ module private FSharpIntellisence =
                 if    x.Name.Substring(0,1).ToLower() = s.ToLower()
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+
 
         if      line.Contains(".")
         then    dotHint 
