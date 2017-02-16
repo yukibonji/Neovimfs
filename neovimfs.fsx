@@ -132,6 +132,7 @@ module private FSharpIntellisence =
 
     let private angleBracket ( s:string ) :string =
         s.Split([|'<';'>'|])
+        |> Array.filter ( fun s -> s <> "" )
         |> fun arr ->
            if     Array.last arr = "."
            then   Array.head arr
@@ -139,6 +140,7 @@ module private FSharpIntellisence =
 
     let private nameSpaceArrayImpl ( s:string) :string array =
         s.Split('.')
+        |> Array.filter ( fun s -> s <> "" )
         |> fun arr ->
             if    Array.last arr = ""
             then  Array.splitAt (arr.Length - 1) arr |> fst
@@ -147,6 +149,7 @@ module private FSharpIntellisence =
     let private nameSpaceArray (s:string) : string array =
         s
         |> fun s -> s.Split(' ')
+        |> Array.filter ( fun s -> s <> "" )
         |> Array.last
         |> fun ( s:string) ->
             if    s.Contains("<")
@@ -156,7 +159,9 @@ module private FSharpIntellisence =
             else  [|s|]
         |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
 
+
     type JsonFormat = { word : string; info: string list list  }
+
 
     let public intellisense (fsc:FSharpChecker) (ctx: HttpContext)  =
 
@@ -181,24 +186,42 @@ module private FSharpIntellisence =
         let sb             = new System.Text.StringBuilder("")
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
 
-        if    line.Contains(".")
-        then  ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, (nameSpaceArray line ,"" ) ) ).Items
-              |> Array.iter ( fun x ->
-                  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                  sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
-        else  line.Split(' ')
-              |> Array.last
-              |> fun s -> s.Replace("[<","")
-              |> fun s ->
-                  if      s.Length = 1
-                  then
-                          let info = ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s ) ) ).Items
-                          info
-                          |> Array.iter ( fun x ->
-                              if    x.Name.Substring(0,1).ToLower() = s.ToLower()
-                              then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                                    sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
-                  else    ()
+        let dotHint =
+            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, (nameSpaceArray line ,"" ) ) ).Items
+            |> Array.iter ( fun x ->
+                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+        let attributeHint ( arr : string [] ) =
+            let s = Array.last arr 
+            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s.Replace("[<","") ) ) ).Items
+            |> Array.iter ( fun x ->
+                if    x.Name.Contains( "Attribute" )
+                then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                      sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+        let oneWordHint ( arr : string [] ) = 
+            let s = Array.last arr
+            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s ) ) ).Items
+            |> Array.iter ( fun x ->
+                if    x.Name.Substring(0,1).ToLower() = s.ToLower()
+                then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                      sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+        if      line.Contains(".")
+        then    dotHint 
+        else    line.Split(' ')
+                |> Array.filter ( fun s -> s <> "" )
+                |> fun ary ->
+                    if      Array.length ary >= 2
+                    then
+                            if    ary.[ Array.length ary - 2 ] = "[<"
+                            then  attributeHint ary
+                            else  oneWordHint   ary
+                    else  
+                            if    Array.last ary |> fun s -> s.Contains("[<")
+                            then  attributeHint ary
+                            else  oneWordHint   ary
 
         sb.ToString()
 

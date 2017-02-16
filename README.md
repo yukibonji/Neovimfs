@@ -87,14 +87,21 @@ let g:quickrun_config = {
 
 ###Intellisense completion with Neovimfs
 
+dot hint  
+
+![alt text](./pic/dotHint.png)
+
+
+attribute hint  
+
+![alt text](./pic/attributeHint.png)
+
+
 one word hint  
 
 ![alt text](./pic/oneWordHint.png)
 
 
-dot hint  
-
-![alt text](./pic/dotHint.png)
 
 Required
 
