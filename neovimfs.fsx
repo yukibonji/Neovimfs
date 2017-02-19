@@ -200,7 +200,7 @@ module private FSharpIntellisence =
 
             lst 
             |> List.iter ( fun s -> 
-                sbb.Clear()
+                sbb.Clear() |> ignore
                 ( FsChecker(fsc, filePath, source).decls(1, 1, "", ( [|s|] ,"" ) ) ).Items
                 |> Array.iter ( fun x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
