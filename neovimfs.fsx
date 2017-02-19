@@ -1,4 +1,4 @@
-// ===========================================================================
+
 //  FILE    : neovimfs.fsx
 //  AUTHOR  : callmekohei <callmekohei at gmail.com>
 //  License : MIT license
@@ -8,6 +8,8 @@ open System
 open System.IO
 open System.Text
 open System.Text.RegularExpressions
+open System.Collections.Generic
+open System.Collections.Concurrent
 
 #r @"./packages/FSharp.Compiler.Service/lib/net45/FSharp.Compiler.Service.dll"
 open Microsoft.FSharp.Compiler
@@ -109,20 +111,24 @@ module private FsharpInteractive =
 
 module private FSharpIntellisence =
 
+    let asyncGetCheckFileResults (checker: FSharpChecker) (file: string) (input: string) = async {
+        let! projOptions =
+            checker.GetProjectOptionsFromScript(file, input)
+
+        let! results =
+            checker.ParseAndCheckFileInProject(file, 0, input, projOptions)
+
+        return
+            match results with
+            | parseFileResults, FSharpCheckFileAnswer.Succeeded(res) -> parseFileResults, res
+            | _, res -> failwithf "Parsing did not finish... (%A)" res
+     }
+
+
     type public FsChecker( checker:FSharpChecker, file:string, input:string ) =
 
-        let projOptions =
-            checker.GetProjectOptionsFromScript(file, input)
-            |> Async.RunSynchronously
-
-        let parseFileResults, checkFileAnswer =
-            checker.ParseAndCheckFileInProject(file, 0, input, projOptions)
-            |> Async.RunSynchronously
-
-        let checkFileResults =
-            match checkFileAnswer with
-            | FSharpCheckFileAnswer.Succeeded(res) -> res
-            | res -> failwithf "Parsing did not finish... (%A)" res
+        let parseFileResults, checkFileResults = 
+            asyncGetCheckFileResults checker file input |> Async.RunSynchronously
 
         member public x.decls ( row:int, col:int, line: string, arr:(string array * string) ) =
             checkFileResults.GetDeclarationListInfo
@@ -163,7 +169,7 @@ module private FSharpIntellisence =
     type JsonFormat = { word : string; info: string list list  }
 
 
-    let public intellisense (fsc:FSharpChecker) (ctx: HttpContext)  =
+    let public intellisense (fsc:FSharpChecker) (ctx: HttpContext) ( dic : ConcurrentDictionary<string,string> )  =
 
         let extractJson key =
             match ctx.request.formData key with
@@ -184,13 +190,51 @@ module private FSharpIntellisence =
         let source    = extractJson "source"
 
         let sb             = new System.Text.StringBuilder("")
-        let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true)
+        let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
+       
 
+        let init () =
+
+            let lst = [ "System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" ]
+            let sbb = new System.Text.StringBuilder()
+
+            lst 
+            |> List.iter ( fun s -> 
+                sbb.Clear()
+                ( FsChecker(fsc, filePath, source).decls(1, 1, "", ( [|s|] ,"" ) ) ).Items
+                |> Array.iter ( fun x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    sbb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+                dic.AddOrUpdate( s , sbb.ToString(), fun a b -> "" )  |> ignore )
+
+ 
         let dotHint =
-            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, (nameSpaceArray line ,"" ) ) ).Items
-            |> Array.iter ( fun x ->
-                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+            let arr = nameSpaceArray line
+
+            match Array.last arr with
+            | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
+
+                if      dic.ContainsKey( Array.last arr )
+                then    dic.Item( Array.last arr ) |> fun s -> sb.AppendLine( s ) |> ignore
+                // else  
+                //         let sbb = new System.Text.StringBuilder()
+                //         ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
+                //         |> Array.iter ( fun x ->
+                //             let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                //             sbb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+                //
+                //         dic.AddOrUpdate( Array.last arr, sbb.ToString(), fun a b -> "" ) |> ignore
+                //
+                //         dic.Item(Array.last arr)
+                //         |> fun s -> sb.AppendLine( s ) |> ignore
+
+            | _ ->
+                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
+                |> Array.iter ( fun x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
 
         let attributeHint ( arr : string [] ) =
             let s = Array.last arr 
@@ -200,6 +244,7 @@ module private FSharpIntellisence =
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
 
+
         let oneWordHint ( arr : string [] ) = 
             let s = Array.last arr
             ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ([||] ,s ) ) ).Items
@@ -208,6 +253,9 @@ module private FSharpIntellisence =
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       sb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
 
+
+        if      Seq.isEmpty dic.Keys
+        then    init ()
 
 
         if      line.Contains(".")
@@ -225,7 +273,7 @@ module private FSharpIntellisence =
                             then  attributeHint ary
                             else  oneWordHint   ary
 
-        sb.ToString()
+        sb.ToString() 
 
 
 module private Suave =
@@ -254,19 +302,20 @@ module private Suave =
 
             OK ( sr.ReadToEnd() ) )
 
-    let private autoComplete (fsc:FSharpChecker) =
+    let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) =
 
         POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
-            OK (intellisense fsc ctx ) ctx )
+            OK (intellisense fsc ctx dic ) ctx )
 
 
     let private app (fsiPath:string) =
 
         let fsi = Fsi(fsiPath)
         let fsc = FSharpChecker.Create()
+        let dic : ConcurrentDictionary<string,string> = new ConcurrentDictionary< string, string >()
 
         choose [ evalScript    fsi
-                 autoComplete  fsc
+                 autoComplete  fsc dic
                  NOT_FOUND     "Resource not found." ]
 
 
