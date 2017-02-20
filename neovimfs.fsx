@@ -195,6 +195,8 @@ module private FSharpIntellisence =
 
         let init () =
 
+            dic.AddOrUpdate("filePath",filePath,fun a b -> "" ) |> ignore
+
             let lst = [ "System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" ]
             let sbb = new System.Text.StringBuilder()
 
@@ -215,19 +217,26 @@ module private FSharpIntellisence =
             match Array.last arr with
             | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
 
-                if      dic.ContainsKey( Array.last arr )
-                then    dic.Item( Array.last arr ) |> fun s -> sb.AppendLine( s ) |> ignore
-                // else  
-                //         let sbb = new System.Text.StringBuilder()
-                //         ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
-                //         |> Array.iter ( fun x ->
-                //             let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                //             sbb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
-                //
-                //         dic.AddOrUpdate( Array.last arr, sbb.ToString(), fun a b -> "" ) |> ignore
-                //
-                //         dic.Item(Array.last arr)
-                //         |> fun s -> sb.AppendLine( s ) |> ignore
+                if      dic.Item( "filePath" ) <> filePath && Array.last arr = "System"
+
+                then        
+                        dic.AddOrUpdate("filePath",filePath,fun a b -> filePath ) |> ignore
+
+                        let sbb = new System.Text.StringBuilder()
+                        ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
+                        |> Array.iter ( fun x ->
+                            let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                            sbb.AppendLine(jsonSerializer.PickleToString(dt)) |> ignore )
+
+                        dic.AddOrUpdate( Array.last arr, sbb.ToString(), fun a b -> sbb.ToString() ) |> ignore
+
+                        dic.Item(Array.last arr)
+                        |> fun s -> sb.AppendLine( s ) |> ignore
+
+
+
+                else    dic.Item( Array.last arr ) |> fun s -> sb.AppendLine( s ) |> ignore
+
 
             | _ ->
                 ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
