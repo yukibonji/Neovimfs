@@ -1,4 +1,4 @@
-
+// ===========================================================================
 //  FILE    : neovimfs.fsx
 //  AUTHOR  : callmekohei <callmekohei at gmail.com>
 //  License : MIT license
@@ -256,7 +256,7 @@ module private FSharpIntellisence  =
                     then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                           state + "\n" + jsonSerializer.PickleToString( dt ) 
                     else  state ) ""
-            
+
             jsonData
 
 
