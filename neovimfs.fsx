@@ -195,10 +195,10 @@ module private FSharpIntellisence  =
 
             dic.AddOrUpdate( "filePath" , filePath , fun a b -> "" ) |> ignore
 
-            let arr = [| "System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
+            let arr = [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
 
-            arr 
-            |> Array.iter ( fun s -> 
+            arr  
+            |> Array.Parallel.iter ( fun s -> 
                 
                 let jsonData = 
                     ( FsChecker(fsc, filePath, source).decls(1, 1, "", ( [|s|] ,"" ) ) ).Items
