@@ -116,8 +116,9 @@ Required
 deoplete configuration
 ```vim
 let g:deoplete#enable_at_startup = 1
-let g:deoplete#max_list = 500
+let g:deoplete#max_list = 250
 set previewheight=5
+let g:deoplete#auto_complete_delay=0
 ```
 
 <br>
