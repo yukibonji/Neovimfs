@@ -198,7 +198,7 @@ module private FSharpIntellisence  =
             let arr = [| "System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
 
             arr 
-            |> Array.Parallel.iter ( fun s -> 
+            |> Array.iter ( fun s -> 
                 
                 let jsonData = 
                     ( FsChecker(fsc, filePath, source).decls(1, 1, "", ( [|s|] ,"" ) ) ).Items
