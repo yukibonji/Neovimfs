@@ -191,10 +191,8 @@ module private FSharpIntellisence  =
 
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
-        let init () : unit =
-            
+        let asyncInit () : Async<unit> = async {
             dic.GetOrAdd( "filePath" , filePath ) |> ignore 
-
             [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
             |> Array.Parallel.iter ( fun s -> 
                 dic.GetOrAdd ( s, fun _ -> 
@@ -202,29 +200,29 @@ module private FSharpIntellisence  =
                     |> Array.fold ( fun state x ->
                         let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                         state + "\n" + jsonSerializer.PickleToString( dt ) ) "") |> ignore )
+        }
+
+
+        let asyncGetSystemNameSpace () : Async<unit> = async {
+            dic.GetOrAdd( "filePath" , filePath ) |> ignore
+            dic.GetOrAdd( "System"   , fun _ ->
+                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [|"System"|] ,"" ) ) ).Items
+                |> Array.fold ( fun state x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) "" ) |> ignore
+        }
 
  
         let dotHint () : string =
-
             let arr = nameSpaceArray line
-
             match Array.last arr with
             | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
-
-                if      dic.Item( "filePath" ) <> filePath && Array.last arr = "System"
-                then    dic.GetOrAdd( "filePath" , filePath ) |> ignore
-                        dic.GetOrAdd( "System"   , fun _ ->
-                            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [|"System"|] ,"" ) ) ).Items
-                            |> Array.fold ( fun state x ->
-                                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                                state + "\n" + jsonSerializer.PickleToString( dt ) ) "" )
-                else    dic.Item( Array.last arr )
+                dic.Item( Array.last arr )
             | _ ->
                 ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
-
 
 
         let attributeHint ( s:string ) : string =
@@ -236,7 +234,6 @@ module private FSharpIntellisence  =
                 else  state ) ""
 
 
-
         let oneWordHint ( s:string ) : string = 
             ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [||], s ) ) ).Items
             |> Array.fold ( fun state x ->
@@ -244,12 +241,12 @@ module private FSharpIntellisence  =
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       state + "\n" + jsonSerializer.PickleToString( dt ) 
                 else  state ) ""
-            
 
 
         if      Seq.isEmpty dic.Keys
-        then    init ()
-
+        then    asyncInit () |> Async.Start
+        elif    dic.Item( "filePath" ) <> filePath
+        then    asyncGetSystemNameSpace () |> Async.Start
 
         if      line.Contains(".")
         then    dotHint ()
