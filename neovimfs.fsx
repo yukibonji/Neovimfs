@@ -191,10 +191,12 @@ module private FSharpIntellisence  =
 
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
+
         let asyncInit () : Async<unit> = async {
             dic.GetOrAdd( "filePath" , filePath ) |> ignore 
             [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
-            |> Array.Parallel.iter ( fun s -> 
+            // Do not use Array.Parallel.iter because too late !
+            |> Array.iter ( fun s -> 
                 dic.GetOrAdd ( s, fun _ -> 
                     ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [|s|] ,"" ) ) ).Items
                     |> Array.fold ( fun state x ->
