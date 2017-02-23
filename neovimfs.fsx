@@ -111,7 +111,12 @@ module private FsharpInteractive =
 
 module private FSharpIntellisence  =
 
-    let asyncGetCheckFileResults (checker: FSharpChecker) (file: string) (input: string) = async {
+    type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source:string }
+    type JsonFormat = { word : string; info: string list list  }
+
+
+    let private asyncGetCheckFileResults (checker: FSharpChecker) (file: string) (input: string) : Async<FSharpParseFileResults * FSharpCheckFileResults> = async {
+        
         let! projOptions =
             checker.GetProjectOptionsFromScript(file, input)
 
@@ -124,16 +129,13 @@ module private FSharpIntellisence  =
             | _, res -> failwithf "Parsing did not finish... (%A)" res
      }
 
+    let private asyncGetDecarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
 
-    type public FsChecker( checker:FSharpChecker, file:string, input:string ) =
+        let! parseFileResults, checkFileResults = 
+            asyncGetCheckFileResults checker ps.FilePath ps.Source
 
-        let parseFileResults, checkFileResults = 
-            asyncGetCheckFileResults checker file input |> Async.RunSynchronously
-
-        member public x.decls ( row:int, col:int, line: string, arr:(string array * string) ) =
-            checkFileResults.GetDeclarationListInfo
-                (Some parseFileResults, row, col, line, (fst arr) |> Array.toList, (snd arr), fun _ -> false)
-                |> Async.RunSynchronously
+        return! checkFileResults.GetDeclarationListInfo (Some parseFileResults, int(ps.Row) , int(ps.Col) , ps.Line, (fst arr) |> Array.toList, (snd arr), fun _ -> false)
+    }
 
 
     let private angleBracket ( s:string ) :string =
@@ -166,9 +168,6 @@ module private FSharpIntellisence  =
         |> Array.map( fun s -> Regex.Replace(s,"\(.*\)","") )
 
 
-    type JsonFormat = { word : string; info: string list list  }
-
-
     let public intellisense (fsc:FSharpChecker) (ctx: HttpContext) ( dic : ConcurrentDictionary<string,string> ) : string =
 
         let extractJson key =
@@ -183,22 +182,19 @@ module private FSharpIntellisence  =
             | FSharpToolTipElement.Group xs                -> xs |> List.map fst
             | FSharpToolTipElement.CompositionError s      -> [s]
 
-        let row       = extractJson "row"
-        let col       = extractJson "col"
-        let line      = extractJson "line"
-        let filePath  = extractJson "filePath"
-        let source    = extractJson "source"
+ 
+        let postData:PostData = { Row = extractJson "row"; Col = extractJson "col"; Line = extractJson "line"; FilePath = extractJson "filePath"; Source = extractJson "source" }
 
         let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
 
         let asyncInit () : Async<unit> = async {
-            dic.GetOrAdd( "filePath" , filePath ) |> ignore 
+            dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore 
             [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
             // Do not use Array.Parallel.iter because too late !
             |> Array.iter ( fun s -> 
                 dic.GetOrAdd ( s, fun _ -> 
-                    ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [|s|] ,"" ) ) ).Items
+                    asyncGetDecarationListInfo fsc postData ( [|s|] ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
                     |> Array.fold ( fun state x ->
                         let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                         state + "\n" + jsonSerializer.PickleToString( dt ) ) "") |> ignore )
@@ -206,9 +202,9 @@ module private FSharpIntellisence  =
 
 
         let asyncGetSystemNameSpace () : Async<unit> = async {
-            dic.GetOrAdd( "filePath" , filePath ) |> ignore
+            dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore
             dic.GetOrAdd( "System"   , fun _ ->
-                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [|"System"|] ,"" ) ) ).Items
+                asyncGetDecarationListInfo fsc postData ( [|"System"|] ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) "" ) |> ignore
@@ -216,19 +212,19 @@ module private FSharpIntellisence  =
 
  
         let dotHint () : string =
-            let arr = nameSpaceArray line
+            let arr = nameSpaceArray postData.Line
             match Array.last arr with
             | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
                 dic.Item( Array.last arr )
             | _ ->
-                ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( arr ,"" ) ) ).Items
+                asyncGetDecarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
 
         let attributeHint ( s:string ) : string =
-            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [||] , s ) ) ).Items
+            asyncGetDecarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
             |> Array.fold ( fun state x ->
                 if    x.Name.Contains( "Attribute" )
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
@@ -237,7 +233,7 @@ module private FSharpIntellisence  =
 
 
         let oneWordHint ( s:string ) : string = 
-            ( FsChecker(fsc, filePath, source).decls(int(row), int(col), line, ( [||], s ) ) ).Items
+            asyncGetDecarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
             |> Array.fold ( fun state x ->
                 if    x.Name.Substring(0,1).ToLower() = s.ToLower()
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
@@ -247,12 +243,12 @@ module private FSharpIntellisence  =
 
         if      Seq.isEmpty dic.Keys
         then    asyncInit () |> Async.Start
-        elif    dic.Item( "filePath" ) <> filePath
+        elif    dic.Item( "filePath" ) <> postData.FilePath
         then    asyncGetSystemNameSpace () |> Async.Start
 
-        if      line.Contains(".")
+        if      postData.Line.Contains(".")
         then    dotHint ()
-        else    line.Split(' ')
+        else    postData.Line.Split(' ')
                 |> Array.filter ( fun s -> s <> "" )
                 |> fun ary ->
                     if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
