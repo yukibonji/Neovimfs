@@ -230,7 +230,7 @@ module private FSharpIntellisence  =
 
 
         if      Seq.isEmpty dic.Keys
-        then    asyncInit () |> Async.Start
+        then    asyncInit () |> Async.Start 
         elif    dic.Item( "filePath" ) <> postData.FilePath
         then    asyncGetSystemNameSpace () |> Async.Start
 
