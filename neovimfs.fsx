@@ -82,27 +82,20 @@ module private FsharpInteractive =
 
                 exn.Message + "\n" |> stdout.WriteLine
 
-                let sb = new System.Text.StringBuilder()
-
                 warnings
                 |> Array.map ( fun w ->
-
-                    sb.Clear() |> ignore
 
                     let severity = match w.Severity with
                                    | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Error   -> "error"
                                    | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Warning -> "warning"
 
-                    sb.Append(
-                           "("  +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
-                        +  " "  +  w.Subcategory
-                        +  " "  +  severity
-                        +  " "  +  "error:" + System.String.Format( "FS{0:0000}" , w.ErrorNumber )
-                        +  "\n" +  (orikaeshi w.Message 65)
-                        +  "\n"
-                    ) |> ignore
-
-                    sb.ToString() )
+                    "("  +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
+                         +  " "  +  w.Subcategory
+                         +  " "  +  severity
+                         +  " "  +  "error:" + System.String.Format( "FS{0:0000}" , w.ErrorNumber )
+                         +  "\n" +  (orikaeshi w.Message 65)
+                         +  "\n"
+                    )
 
                 |> Array.sort
                 |> Array.distinct
@@ -118,10 +111,10 @@ module private FSharpIntellisence  =
     let private asyncGetCheckFileResults (checker: FSharpChecker) (file: string) (input: string) : Async<FSharpParseFileResults * FSharpCheckFileResults> = async {
         
         let! projOptions =
-            checker.GetProjectOptionsFromScript(file, input)
+            checker.GetProjectOptionsFromScript(file, input) // Async<FSharpProjectOptions>
 
         let! results =
-            checker.ParseAndCheckFileInProject(file, 0, input, projOptions)
+            checker.ParseAndCheckFileInProject(file, 0, input, projOptions) //  Async<FSharpParseFileResults * FSharpCheckFileAnswer>
 
         return
             match results with
@@ -132,9 +125,10 @@ module private FSharpIntellisence  =
     let private asyncGetDecarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
 
         let! parseFileResults, checkFileResults = 
-            asyncGetCheckFileResults checker ps.FilePath ps.Source
+            asyncGetCheckFileResults checker ps.FilePath ps.Source // Async<FSharpParseFileResults * FSharpCheckFileResults>
 
         return! checkFileResults.GetDeclarationListInfo (Some parseFileResults, int(ps.Row) , int(ps.Col) , ps.Line, (fst arr) |> Array.toList, (snd arr), fun _ -> false)
+        // Async<FSharpDeclarationListInfo>                
     }
 
 
