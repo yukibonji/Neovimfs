@@ -108,28 +108,22 @@ module private FSharpIntellisence  =
     type JsonFormat = { word : string; info: string list list  }
 
 
-    let private asyncGetCheckFileResults (checker: FSharpChecker) (file: string) (input: string) : Async<FSharpParseFileResults * FSharpCheckFileResults> = async {
-        
-        let! projOptions =
-            checker.GetProjectOptionsFromScript(file, input) // Async<FSharpProjectOptions>
-
-        let! results =
-            checker.ParseAndCheckFileInProject(file, 0, input, projOptions) //  Async<FSharpParseFileResults * FSharpCheckFileAnswer>
-
-        return
-            match results with
-            | parseFileResults, FSharpCheckFileAnswer.Succeeded(res) -> parseFileResults, res
-            | _, res -> failwithf "Parsing did not finish... (%A)" res
-     }
-
     let private asyncGetDecarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
 
-        let! parseFileResults, checkFileResults = 
-            asyncGetCheckFileResults checker ps.FilePath ps.Source // Async<FSharpParseFileResults * FSharpCheckFileResults>
+        let! (projOptions : FSharpProjectOptions) =
+            checker.GetProjectOptionsFromScript(ps.FilePath , ps.Source )
 
-        return! checkFileResults.GetDeclarationListInfo (Some parseFileResults, int(ps.Row) , int(ps.Col) , ps.Line, (fst arr) |> Array.toList, (snd arr), fun _ -> false)
-        // Async<FSharpDeclarationListInfo>                
+        let! (parseFileResults : FSharpParseFileResults) , (checkFileAnswer: FSharpCheckFileAnswer) =
+            checker.ParseAndCheckFileInProject(ps.FilePath, 0, ps.Source, projOptions)
+
+        let checkFileResults : FSharpCheckFileResults =
+            match checkFileAnswer with
+            | FSharpCheckFileAnswer.Succeeded(res) -> res
+            | res -> failwithf "Parsing did not finish... (%A)" res
+
+        return! checkFileResults.GetDeclarationListInfo ( Some parseFileResults, int(ps.Row) , int(ps.Col) , ps.Line, (fst arr) |> Array.toList, (snd arr), fun _ -> false )
     }
+
 
 
     let private angleBracket ( s:string ) :string =
