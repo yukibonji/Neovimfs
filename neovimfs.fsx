@@ -89,7 +89,7 @@ module private FsharpInteractive =
                                    | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Error   -> "error"
                                    | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Warning -> "warning"
 
-                    "("  +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
+                    "("          +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
                          +  " "  +  w.Subcategory
                          +  " "  +  severity
                          +  " "  +  "error:" + System.String.Format( "FS{0:0000}" , w.ErrorNumber )
@@ -107,16 +107,46 @@ module private FSharpIntellisence  =
     type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source:string }
     type JsonFormat = { word : string; info: string list list  }
 
+    // let private asyncGetDeclarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
+    //
+    //     let! (projOptions : FSharpProjectOptions) =
+    //         checker.GetProjectOptionsFromScript( ps.FilePath , ps.Source )
+    //
+    //     let! ( parseFileResults: FSharpParseFileResults ) =
+    //         checker.ParseFileInProject( ps.FilePath, ps.Source, projOptions )
+    //
+    //     let! ( checkFileAnswer: FSharpCheckFileAnswer option ) =
+    //         checker.CheckFileInProjectIfReady ( parseFileResults, ps.FilePath, 0, ps.Source, projOptions )
+    //
+    //     let ( checkFileAnswer2: Async<FSharpCheckFileAnswer> ) =
+    //         checker.CheckFileInProject( parseFileResults, ps.FilePath, 0, ps.Source, projOptions )
+    //     
+    //     let checkFileResults =
+    //         match checkFileAnswer with
+    //         | Some ( FSharpCheckFileAnswer.Succeeded(x) ) -> x
+    //         | Some ( FSharpCheckFileAnswer.Aborted ) | None ->
+    //
+    //             match checkFileAnswer2 |> Async.RunSynchronously with
+    //             | FSharpCheckFileAnswer.Succeeded(res) -> res 
+    //             | res -> failwithf "Parsing did not finish... (%A)" res
+    //         
+    //
+    //
+    //     return! checkFileResults.GetDeclarationListInfo ( Some parseFileResults, int(ps.Row) , int(ps.Col) , ps.Line, (fst arr) |> Array.toList, (snd arr), fun _ -> false )
+    // }
 
-    let private asyncGetDecarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
+
+
+    let private asyncGetDeclarationListInfo ( checker:FSharpChecker) ( ps:PostData ) (arr:(string array * string)) : Async<FSharpDeclarationListInfo> = async {
 
         let! (projOptions : FSharpProjectOptions) =
-            checker.GetProjectOptionsFromScript(ps.FilePath , ps.Source )
+            checker.GetProjectOptionsFromScript( ps.FilePath , ps.Source )
 
+        // Perform parsing and type checking 
         let! (parseFileResults : FSharpParseFileResults) , (checkFileAnswer: FSharpCheckFileAnswer) =
-            checker.ParseAndCheckFileInProject(ps.FilePath, 0, ps.Source, projOptions)
+            checker.ParseAndCheckFileInProject( ps.FilePath, 0, ps.Source, projOptions )
 
-        let checkFileResults : FSharpCheckFileResults =
+        let checkFileResults = 
             match checkFileAnswer with
             | FSharpCheckFileAnswer.Succeeded(res) -> res
             | res -> failwithf "Parsing did not finish... (%A)" res
@@ -177,25 +207,45 @@ module private FSharpIntellisence  =
 
 
         let asyncInit () : Async<unit> = async {
+            
+            let f nameSpace word  = fun _ ->
+                asyncGetDeclarationListInfo fsc postData ( nameSpace ,word ) |> Async.RunSynchronously |> fun x -> x.Items
+                |> Array.fold ( fun state x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) "" 
+            
             dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore 
-            [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
+
             // Do not use Array.Parallel.iter because too late !
-            |> Array.iter ( fun s -> 
-                dic.GetOrAdd ( s, fun _ -> 
-                    asyncGetDecarationListInfo fsc postData ( [|s|] ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
-                    |> Array.fold ( fun state x ->
-                        let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                        state + "\n" + jsonSerializer.PickleToString( dt ) ) "") |> ignore )
+            [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
+            |> Array.iter ( fun s -> dic.GetOrAdd ( s, f [|s|] "" ) |> ignore )
+
+            dic.GetOrAdd( "OneWordHint", f [||] "" ) |> ignore
         }
 
 
-        let asyncGetSystemNameSpace () : Async<unit> = async {
-            dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore
-            dic.GetOrAdd( "System"   , fun _ ->
-                asyncGetDecarationListInfo fsc postData ( [|"System"|] ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
+        let asyncReInit () : Async<unit> = async {
+
+            let f nameSpace word = fun _ _  ->
+                asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                    state + "\n" + jsonSerializer.PickleToString( dt ) ) "" ) |> ignore
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+
+            dic.AddOrUpdate( "filePath"   , dic.Item("filePath")   , fun a b -> postData.FilePath ) |> ignore
+            dic.AddOrUpdate( "System"     , dic.Item("System")     , f [|"System"|] "" )            |> ignore 
+            // dic.AddOrUpdate( "OneWordHint", dic.Item("OneWordHint"), f [||] "" )                    |> ignore
+        }
+
+        let asyncReOneWordHint () : Async<unit> = async {
+
+            let f nameSpace word = fun _ _  ->
+                asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
+                |> Array.fold ( fun state x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+
+            dic.AddOrUpdate( "OneWordHint", dic.Item("OneWordHint"), f [||] "" ) |> ignore
         }
 
  
@@ -205,14 +255,14 @@ module private FSharpIntellisence  =
             | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
                 dic.Item( Array.last arr )
             | _ ->
-                asyncGetDecarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
+                asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
 
         let attributeHint ( s:string ) : string =
-            asyncGetDecarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
+            asyncGetDeclarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
             |> Array.fold ( fun state x ->
                 if    x.Name.Contains( "Attribute" )
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
@@ -221,27 +271,53 @@ module private FSharpIntellisence  =
 
 
         let oneWordHint ( s:string ) : string = 
-            asyncGetDecarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
+            asyncGetDeclarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
             |> Array.fold ( fun state x ->
                 if    x.Name.Substring(0,1).ToLower() = s.ToLower()
                 then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                       state + "\n" + jsonSerializer.PickleToString( dt ) 
                 else  state ) ""
 
+        let oneWordHint2 (s:string) : string =
+            try
+                dic.Item( "OneWordHint" )
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+            with
+                | :? System.ArgumentException -> "" 
+
+        let attributeHint2 (s:string) : string =
+            dic.Item( "OneWordHint" )
+            |> fun str -> str.Split('\n')
+            |> Array.filter ( fun str -> str.Contains("Attribute") )
+            |> Array.reduce ( fun a b -> a + "\n" + b )
+
 
         if      Seq.isEmpty dic.Keys
-        then    asyncInit () |> Async.Start 
+        then    asyncInit ()   |> Async.RunSynchronously
         elif    dic.Item( "filePath" ) <> postData.FilePath
-        then    asyncGetSystemNameSpace () |> Async.Start
+        then    asyncReInit () |> Async.Start 
 
         if      postData.Line.Contains(".")
         then    dotHint ()
-        else    postData.Line.Split(' ')
+        else    
+               
+                // why? very naive
+                asyncReOneWordHint() |> Async.Start
+                postData.Line.Split(' ')
                 |> Array.filter ( fun s -> s <> "" )
                 |> fun ary ->
                     if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
-                    then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-                    else  oneWordHint   ( Array.last ary )
+                    then  attributeHint2 ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+                    else  oneWordHint2   ( Array.last ary )
+
+                // postData.Line.Split(' ')
+                // |> Array.filter ( fun s -> s <> "" )
+                // |> fun ary ->
+                //     if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
+                //     then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+                //     else  oneWordHint   ( Array.last ary )
 
 
 
