@@ -220,32 +220,32 @@ module private FSharpIntellisence  =
             [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
             |> Array.iter ( fun s -> dic.GetOrAdd ( s, f [|s|] "" ) |> ignore )
 
-            dic.GetOrAdd( "OneWordHint", f [||] "" ) |> ignore
+            // dic.GetOrAdd( "OneWordHint", f [||] "" ) |> ignore
         }
 
 
         let asyncReInit () : Async<unit> = async {
 
-            let f nameSpace word = fun _ _  ->
+            let f nameSpace word =
                 asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
-            dic.AddOrUpdate( "filePath"   , dic.Item("filePath")   , fun a b -> postData.FilePath ) |> ignore
-            dic.AddOrUpdate( "System"     , dic.Item("System")     , f [|"System"|] "" )            |> ignore 
-            // dic.AddOrUpdate( "OneWordHint", dic.Item("OneWordHint"), f [||] "" )                    |> ignore
+            dic.TryUpdate( "filePath"   , postData.FilePath , dic.Item("filePath")    ) |> ignore
+            dic.TryUpdate( "System"     , f [|"System"|] "" , dic.Item("System")      ) |> ignore 
+            // dic.TryUpdate( "OneWordHint", f [||] ""         , dic.Item("OneWordHint") ) |> ignore
         }
 
-        let asyncReOneWordHint () : Async<unit> = async {
+        let asyncReOneWordHint () : Async<unit> = async { 
 
-            let f nameSpace word = fun _ _  ->
+            let f nameSpace word  = 
                 asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
                 |> Array.fold ( fun state x ->
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
-            dic.AddOrUpdate( "OneWordHint", dic.Item("OneWordHint"), f [||] "" ) |> ignore
+            dic.TryUpdate( "OneWordHint", f [||] "" , dic.Item("OneWordHint") ) |> ignore
         }
 
  
@@ -278,6 +278,9 @@ module private FSharpIntellisence  =
                       state + "\n" + jsonSerializer.PickleToString( dt ) 
                 else  state ) ""
 
+
+
+
         let oneWordHint2 (s:string) : string =
             try
                 dic.Item( "OneWordHint" )
@@ -288,10 +291,13 @@ module private FSharpIntellisence  =
                 | :? System.ArgumentException -> "" 
 
         let attributeHint2 (s:string) : string =
-            dic.Item( "OneWordHint" )
-            |> fun str -> str.Split('\n')
-            |> Array.filter ( fun str -> str.Contains("Attribute") )
-            |> Array.reduce ( fun a b -> a + "\n" + b )
+            try
+                dic.Item( "OneWordHint" )
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> str.Contains("Attribute") )
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+            with
+                | :? System.ArgumentException -> ""
 
 
         if      Seq.isEmpty dic.Keys
@@ -301,23 +307,22 @@ module private FSharpIntellisence  =
 
         if      postData.Line.Contains(".")
         then    dotHint ()
-        else    
-               
-                // why? very naive
-                asyncReOneWordHint() |> Async.Start
-                postData.Line.Split(' ')
-                |> Array.filter ( fun s -> s <> "" )
-                |> fun ary ->
-                    if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
-                    then  attributeHint2 ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-                    else  oneWordHint2   ( Array.last ary )
-
+        else  
+                // asyncReOneWordHint () |> Async.Start
+                //
                 // postData.Line.Split(' ')
                 // |> Array.filter ( fun s -> s <> "" )
                 // |> fun ary ->
                 //     if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
-                //     then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-                //     else  oneWordHint   ( Array.last ary )
+                //     then  attributeHint2 ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+                //     else  oneWordHint2   ( Array.last ary )
+
+                postData.Line.Split(' ')
+                |> Array.filter ( fun s -> s <> "" )
+                |> fun ary ->
+                    if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
+                    then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+                    else  oneWordHint   ( Array.last ary )
 
 
 
