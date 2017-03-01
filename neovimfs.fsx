@@ -183,11 +183,26 @@ module private FSharpIntellisence  =
             // Do not use Array.Parallel.iter because too late !
             [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
             |> Array.iter ( fun s -> dic.GetOrAdd ( s, jsonStrings [|s|] "" ) |> ignore )
+
+            dic.GetOrAdd( "OneWordHint" , jsonStrings [||] "" ) |> ignore 
         }
 
         let asyncReInit () : Async<unit> = async {
-            dic.TryUpdate( "filePath" , postData.FilePath           , dic.Item("filePath")    ) |> ignore
-            dic.TryUpdate( "System"   , jsonStrings [|"System"|] "" , dic.Item("System")      ) |> ignore 
+            dic.TryUpdate( "filePath"   , postData.FilePath           , dic.Item("filePath")    ) |> ignore
+            dic.TryUpdate( "System"     , jsonStrings [|"System"|] "" , dic.Item("System")      ) |> ignore 
+            dic.TryUpdate( "OneWordHint", jsonStrings [||] ""         , dic.Item("OneWordHint") ) |> ignore 
+        }
+
+        let asyncReOneWordHint () : Async<unit> = async {
+            
+            let x = jsonStrings [||] ""
+           
+           dic.AddOrUpdate( "OneWordHint", x , fun key existingVal ->
+                if      x <> existingVal
+                then    x
+                else    dic.Item("OneWordHint")
+            ) |> ignore
+
         }
  
         let dotHint () : string =
@@ -201,21 +216,23 @@ module private FSharpIntellisence  =
                     let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                     state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
-        let attributeHint ( s:string ) : string =
-            asyncGetDeclarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
-            |> Array.fold ( fun state x ->
-                if    x.Name.Contains( "Attribute" )
-                then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                      state + "\n" + jsonSerializer.PickleToString( dt ) 
-                else  state ) ""
+        let oneWordHint (s:string) : string =
+            try
+                dic.Item( "OneWordHint" )
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+            with
+                | :? System.ArgumentException -> "" 
 
-        let oneWordHint ( s:string ) : string = 
-            asyncGetDeclarationListInfo fsc postData ( [||] , s ) |> Async.RunSynchronously |> fun x -> x.Items
-            |> Array.fold ( fun state x ->
-                if    x.Name.Substring(0,1).ToLower() = s.ToLower()
-                then  let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                      state + "\n" + jsonSerializer.PickleToString( dt ) 
-                else  state ) ""
+        let attributeHint (s:string) : string =
+            try
+                dic.Item( "OneWordHint" )
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> str.Contains("Attribute") )
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+            with
+                | :? System.ArgumentException -> ""
 
 
         if      Seq.isEmpty dic.Keys
@@ -225,14 +242,17 @@ module private FSharpIntellisence  =
 
         if      postData.Line.Contains(".")
         then    dotHint ()
-        else  
+        else    
+                if      System.Random().Next(5) = 4 
+                then    asyncReOneWordHint () |> Async.Start
+                else    ()
+
                 postData.Line.Split(' ')
                 |> Array.filter ( fun s -> s <> "" )
                 |> fun ary ->
-                    if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
-                    then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-                    else  oneWordHint   ( Array.last ary )
-
+                   if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
+                   then  attributeHint ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+                   else  oneWordHint   ( Array.last ary )
 
 
 module private Suave =
