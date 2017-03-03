@@ -17,8 +17,6 @@ open System.Collections.Concurrent
 #r @"./packages/Rx-Interfaces/lib/net45/System.Reactive.Interfaces.dll"
 #r @"./packages/Rx-PlatformServices/lib/net45/System.Reactive.PlatformServices.dll"
 open FSharp.Control.Reactive
-open FSharp.Control.Reactive.Observable
-open System.Reactive.Linq
 
 #r @"./packages/FSharp.Compiler.Service/lib/net45/FSharp.Compiler.Service.dll"
 open Microsoft.FSharp.Compiler
@@ -292,9 +290,7 @@ module  FSharpIntellisence  =
 
         if      postData.Line.Contains(".")
         then    dotHint    ()
-        else
-                
-                gen.OnEvnt postData
+        else    gen.OnEvnt postData
                 abc ()
 
         
