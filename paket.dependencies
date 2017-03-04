@@ -1,0 +1,10 @@
+source https://www.nuget.org/api/v2
+
+
+nuget rx-main
+nuget FSharp.Control.Reactive
+nuget suave
+nuget fsharp.compiler.service
+nuget FsPickler
+nuget FsPickler.json
+nuget newtonsoft.json

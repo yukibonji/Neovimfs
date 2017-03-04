@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/10/nuspec.xsd">
+  <metadata>
+    <id>FSharp.Compiler.Service</id>
+    <version>9.0.1</version>
+    <authors>Microsoft Corporation, Dave Thomas, Anh-Dung Phan, Tomas Petricek</authors>
+    <licenseUrl>https://github.com/fsharp/FSharp.Compiler.Service/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/fsharp/FSharp.Compiler.Service</projectUrl>
+    <iconUrl>https://raw.github.com/fsharp/FSharp.Compiler.Service/master/misc/logo.png</iconUrl>
+    <description>The F# compiler services package contains a custom build of the F# compiler that
+exposes additional functionality for implementing F# language bindings, additional
+tools based on the compiler or refactoring tools. The package also includes F#
+interactive service that can be used for embedding F# scripting into your applications.</description>
+    <summary>F# compiler services for creating IDE tools, language extensions and for F# embedding.</summary>
+    <releaseNotes>[Adds FormatValue to FsiEvaluationSession, using the fsi object values for formatting](https://github.com/fsharp/FSharp.Compiler.Service/pull/686)</releaseNotes>
+    <tags>F# fsharp interactive compiler editor</tags>
+    <dependencies>
+      <dependency id="System.Collections.Immutable" version="1.2.0" />
+      <dependency id="System.Reflection.Metadata" version="1.4.1-beta-24227-04" />
+    </dependencies>
+  </metadata>
+</package>

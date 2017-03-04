@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<coreProperties xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>Ademar Gonzalez, Henrik Feldt</dc:creator>
+  <dc:description>Suave is a simple web development F# library providing a lightweight web server and a set of combinators to manipulate route flow and task composition.</dc:description>
+  <dc:identifier>Suave</dc:identifier>
+  <version>2.0.2</version>
+  <keywords />
+  <dc:title>Suave</dc:title>
+  <lastModifiedBy>paket</lastModifiedBy>
+</coreProperties>

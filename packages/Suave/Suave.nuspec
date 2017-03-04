@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Suave</id>
+    <version>2.0.2</version>
+    <title>Suave</title>
+    <authors>Ademar Gonzalez, Henrik Feldt</authors>
+    <owners>Ademar Gonzalez, Henrik Feldt</owners>
+    <licenseUrl>https://github.com/SuaveIO/Suave/blob/master/COPYING</licenseUrl>
+    <projectUrl>http://suave.io</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/SuaveIO/resources/master/images/head_trans.png</iconUrl>
+    <description>Suave is a simple web development F# library providing a lightweight web server and a set of combinators to manipulate route flow and task composition.</description>
+    <releaseNotes>Release Notes:
+* [infra] bump dependencies v2.0.2
+* [infra] bump Expecto</releaseNotes>
+    <copyright>Ademar Gonzalez, Henrik Feldt</copyright>
+    <language>en-GB</language>
+    <dependencies>
+      <group>
+        <dependency id="FSharp.Core" version="4.0.0.1"></dependency>
+      </group>
+      <group targetFramework=".NETStandard1.6">
+        <dependency id="System.Data.Common" version="[4.1.0, )"></dependency>
+        <dependency id="System.Diagnostics.Process" version="[4.1.0, )"></dependency>
+        <dependency id="System.Security.Cryptography.Primitives" version="[4.0.0, )"></dependency>
+        <dependency id="System.Net.Security" version="[4.0.0, )"></dependency>
+        <dependency id="System.Globalization.Extensions" version="[4.0.1, )"></dependency>
+        <dependency id="Microsoft.FSharp.Core.netcore" version="[1.0.0-alpha-161205, )"></dependency>
+        <dependency id="NETStandard.Library" version="[1.6.0, )"></dependency>
+        <dependency id="System.Security.Claims" version="[4.0.1, )"></dependency>
+        <dependency id="System.Runtime.Serialization.Json" version="[4.0.2, )"></dependency>
+      </group>
+    </dependencies>
+  </metadata>
+</package>
