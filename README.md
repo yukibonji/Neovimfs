@@ -11,12 +11,6 @@ Neovimfs is that Fsi and intellisense works on Suave server.
 $ git clone https://github.com/callmekohei/Neovimfs
 ```
 
-###Required
-
-01. Suave
-02. FSharp.Compiler.Service
-
-
 ###How to use
 01. compile `neovimfs.fsx`
 02. mono `neovimfs.exe` `/path/to/fsi.exe`
