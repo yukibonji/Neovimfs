@@ -127,16 +127,16 @@ type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source
 
 type JsonFormat = { word : string; info: string list list  }
 
-type SetPostDataEventArgs<'a>( postData:PostData ) =
-    inherit System.EventArgs()
-    member this.Post_Data = postData 
+type OneWordHintsEventGenerator(asyncReOneWordHintsFunc: PostData -> Async<unit>) =
+    let m_Event = new Event<PostData>()
 
-type SetPostDataDelegate = delegate of obj * SetPostDataEventArgs<PostData> -> unit
+    do
+        m_Event.Publish
+        |> Observable.throttle  (System.TimeSpan.FromMilliseconds(2000.))
+        |> Observable.subscribe (asyncReOneWordHintsFunc >> Async.Start)
+        |> ignore 
 
-type OneWordHintsEventGenerator() =
-    let    m_Event                     = new Event<SetPostDataDelegate, SetPostDataEventArgs<PostData>>()
-    member this.OneWordHintsInputEvent = m_Event.Publish
-    member this.ReCashOneWordHints (x) = m_Event.Trigger(this, new SetPostDataEventArgs<_>(x))
+    member this.ReCashOneWordHints (x) = m_Event.Trigger(x)
 
 
 module Util =
@@ -230,8 +230,6 @@ module  FSharpIntellisence  =
 
     let asyncReOneWordHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
         
-        // dic.TryUpdate( "OneWordHint", jsonStrings fsc postData [||] ""         , dic.Item("OneWordHint") ) |> ignore 
-
         let x = jsonStrings fsc postData [||] ""
 
         dic.AddOrUpdate( "OneWordHint", x , fun key existingVal ->
@@ -241,6 +239,8 @@ module  FSharpIntellisence  =
         ) |> ignore
 
     }
+    
+    
 
     let public intellisense (fsc:FSharpChecker) (ctx: HttpContext) ( dic : ConcurrentDictionary<string,string> ) ( gen : OneWordHintsEventGenerator ) : string =
  
@@ -312,7 +312,6 @@ module private Suave =
     open FsharpInteractive
     open FSharpIntellisence
 
-
     let private evalScript (fsi:Fsi) =
 
         GET >=> pathScan "/evalScript/%s" ( fun fp ->
@@ -337,24 +336,16 @@ module private Suave =
         POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
             OK (intellisense fsc ctx dic gen ) ctx )
 
-
-
     let private app (fsiPath:string) =
 
         let fsi = Fsi(fsiPath)
         let fsc = FSharpChecker.Create()
         let dic : ConcurrentDictionary<string,string> = new ConcurrentDictionary< string, string >()
-        let gen = new OneWordHintsEventGenerator()
-
-        gen.OneWordHintsInputEvent
-        |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(2000.))
-        |> Observable.subscribe ( fun e -> asyncReOneWordHints fsc dic e.Post_Data |> Async.Start )
-        |> ignore 
+        let gen = new OneWordHintsEventGenerator(asyncReOneWordHints fsc dic)
 
         choose [ evalScript    fsi
                  autoComplete  fsc dic gen
                  NOT_FOUND     "Resource not found." ]
-
 
     [<EntryPointAttribute>]
     let private main argv =
