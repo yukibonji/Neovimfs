@@ -17,6 +17,8 @@ open System.Collections.Concurrent
 #r @"./packages/Rx-Interfaces/lib/net45/System.Reactive.Interfaces.dll"
 #r @"./packages/Rx-PlatformServices/lib/net45/System.Reactive.PlatformServices.dll"
 open FSharp.Control.Reactive
+open FSharp.Control.Reactive.Observable
+open System.Reactive.Linq
 
 #r @"./packages/FSharp.Compiler.Service/lib/net45/FSharp.Compiler.Service.dll"
 open Microsoft.FSharp.Compiler
@@ -127,19 +129,14 @@ type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source
 
 type JsonFormat = { word : string; info: string list list  }
 
-type OneWordHintsEventGenerator(asyncReOneWordHintsFunc: PostData -> Async<unit>) =
-    let m_Event = new Event<PostData>()
 
-    do
-        m_Event.Publish
-        |> Observable.throttle  (System.TimeSpan.FromMilliseconds(2000.))
-        |> Observable.subscribe (asyncReOneWordHintsFunc >> Async.Start)
-        |> ignore 
-
-    member this.ReCashOneWordHints (x) = m_Event.Trigger(x)
+        
 
 
 module Util =
+
+
+    let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
     let angleBracket ( s:string ) :string =
         s.Split([|'<';'>'|])
@@ -201,10 +198,21 @@ module Util =
     }
 
 
+type Generator( time:float, func: PostData -> Async<unit> ) =
+    let m_Event = new Event<PostData>()
+
+    do
+        m_Event.Publish
+        |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(time) )
+        |> Observable.subscribe ( func >> Async.Start )
+        |> ignore 
+
+    member this.ReCashOneWordHints (x) = m_Event.Trigger(x)
+
+
 module  FSharpIntellisence  =
     open Util
 
-    let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
     let jsonStrings (fsc:FSharpChecker) (postData:PostData) (nameSpace: string [] )  (word:string) : string =
         asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
@@ -239,10 +247,48 @@ module  FSharpIntellisence  =
         ) |> ignore
 
     }
-    
+
+
+    let dotHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData)  : string =
+        let arr = nameSpaceArray postData.Line
+        match Array.last arr with
+        | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
+            dic.Item( Array.last arr )
+        | _ ->
+            asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
+            |> Array.fold ( fun state x ->
+                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+
+
+    let oneWordHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
+        try
+            dic.Item( "OneWordHint" )
+            |> fun str -> str.Split('\n')
+            |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
+            |> Array.reduce ( fun a b -> a + "\n" + b )
+        with
+            | :? System.ArgumentException -> "" 
+
+    let attributeHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
+        try
+            dic.Item( "OneWordHint" )
+            |> fun str -> str.Split('\n')
+            |> Array.filter ( fun str -> str.Contains("Attribute") )
+            |> Array.reduce ( fun a b -> a + "\n" + b )
+        with
+            | :? System.ArgumentException -> ""
+
+    let oneWordOrAttributeHints (dic:ConcurrentDictionary<string,string>) (postData:PostData) : string =
+        postData.Line.Split(' ')
+        |> Array.filter ( fun s -> s <> "" )
+        |> fun ary ->
+           if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
+           then  attributeHints dic  ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
+           else  oneWordHints   dic  ( Array.last ary )
     
 
-    let public intellisense (fsc:FSharpChecker) (ctx: HttpContext) ( dic : ConcurrentDictionary<string,string> ) ( gen : OneWordHintsEventGenerator ) : string =
+    let public intellisense (fsc:FSharpChecker) ( dic : ConcurrentDictionary<string,string> ) ( gen : Generator )  (ctx: HttpContext) : string =
  
         let postData:PostData = {
             Row      = extractJson ctx "row"
@@ -251,54 +297,17 @@ module  FSharpIntellisence  =
             FilePath = extractJson ctx "filePath"
             Source   = extractJson ctx "source" }
 
-        let dotHints () : string =
-            let arr = nameSpaceArray postData.Line
-            match Array.last arr with
-            | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
-                dic.Item( Array.last arr )
-            | _ ->
-                asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
-                |> Array.fold ( fun state x ->
-                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
-
-        let oneWordHints (s:string) : string =
-            try
-                dic.Item( "OneWordHint" )
-                |> fun str -> str.Split('\n')
-                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
-                |> Array.reduce ( fun a b -> a + "\n" + b )
-            with
-                | :? System.ArgumentException -> "" 
-
-        let attributeHints (s:string) : string =
-            try
-                dic.Item( "OneWordHint" )
-                |> fun str -> str.Split('\n')
-                |> Array.filter ( fun str -> str.Contains("Attribute") )
-                |> Array.reduce ( fun a b -> a + "\n" + b )
-            with
-                | :? System.ArgumentException -> ""
-
-        let oneWordOrAttributeHints (): string =
-            postData.Line.Split(' ')
-            |> Array.filter ( fun s -> s <> "" )
-            |> fun ary ->
-               if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
-               then  attributeHints ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-               else  oneWordHints   ( Array.last ary )
-
-
         if      Seq.isEmpty dic.Keys
         then    asyncInit fsc dic postData   |> Async.RunSynchronously
         elif    dic.Item( "filePath" ) <> postData.FilePath
         then    asyncReInit fsc dic postData |> Async.Start 
 
         if      postData.Line.Contains(".")
-        then    dotHints    ()
+        then    dotHints fsc dic postData 
         else    gen.ReCashOneWordHints postData
-                oneWordOrAttributeHints ()
+                oneWordOrAttributeHints dic postData
 
+        
 
 
 
@@ -306,7 +315,18 @@ module  FSharpIntellisence  =
 // Suave
 //
 
-
+// type Generator2( time:float, f: HttpContext -> string)  =
+//     let m_Event = new Event<_>()
+//
+//     do
+//         m_Event.Publish
+//         |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(time) )
+//         |> Observable.add ( f >> ignore ) 
+//
+//     member this.Intellisense (x:HttpContext) : string =
+//         m_Event.Trigger(x)
+        
+                
 module private Suave =
 
     open FsharpInteractive
@@ -331,20 +351,23 @@ module private Suave =
 
             OK ( sr.ReadToEnd() ) )
 
-    let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) ( gen : OneWordHintsEventGenerator ) =
-
+    let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) ( gen : Generator ) =
+        
         POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
-            OK (intellisense fsc ctx dic gen ) ctx )
+            
+            // OK ( gen2.Intellisense ctx ) ctx )
+            OK (intellisense fsc dic gen ctx ) ctx )
 
     let private app (fsiPath:string) =
 
         let fsi = Fsi(fsiPath)
         let fsc = FSharpChecker.Create()
         let dic : ConcurrentDictionary<string,string> = new ConcurrentDictionary< string, string >()
-        let gen = new OneWordHintsEventGenerator(asyncReOneWordHints fsc dic)
+        let gen  = new Generator(2000., asyncReOneWordHints fsc dic)
+        // let gen2 = new Generator2(200., intellisense fsc dic gen)
 
         choose [ evalScript    fsi
-                 autoComplete  fsc dic gen
+                 autoComplete  fsc dic gen 
                  NOT_FOUND     "Resource not found." ]
 
     [<EntryPointAttribute>]
