@@ -11,6 +11,7 @@ open System.Text.RegularExpressions
 open System.Collections.Generic
 open System.Collections.Concurrent
 
+
 #r @"./packages/FSharp.Control.Reactive/lib/net45/FSharp.Control.Reactive.dll"
 #r @"./packages/Rx-Core/lib/net45/System.Reactive.Core.dll"
 #r @"./packages/Rx-Linq/lib/net45/System.Reactive.Linq.dll"
@@ -18,7 +19,6 @@ open System.Collections.Concurrent
 #r @"./packages/Rx-PlatformServices/lib/net45/System.Reactive.PlatformServices.dll"
 open FSharp.Control.Reactive
 open FSharp.Control.Reactive.Observable
-open System.Reactive.Linq
 
 #r @"./packages/FSharp.Compiler.Service/lib/net45/FSharp.Compiler.Service.dll"
 open Microsoft.FSharp.Compiler
@@ -45,7 +45,6 @@ open Suave.RequestErrors
 //----------------------------------------------------------------------------
 // FSharp Interactive
 //
-
 
 module private FsharpInteractive =
 
@@ -124,17 +123,22 @@ module private FsharpInteractive =
 // FSharp Intellisence
 //
 
-
 type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source:string }
 
 type JsonFormat = { word : string; info: string list list  }
 
+type Generator( time:float, func: PostData -> Async<unit> ) =
+    let m_Event = new Event<PostData>()
 
-        
+    do
+        m_Event.Publish
+        |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(time) )
+        |> Observable.subscribe ( func >> Async.Start )
+        |> ignore 
 
+    member this.ReCashOneWordHints (x) = m_Event.Trigger(x)
 
 module Util =
-
 
     let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
 
@@ -171,7 +175,6 @@ module Util =
         match ctx.request.formData key with
         | Choice1Of2 x -> x
         | _            -> ""
-    
 
     let extractGroupTexts = function
         | FSharpToolTipElement.None                    -> []
@@ -198,21 +201,8 @@ module Util =
     }
 
 
-type Generator( time:float, func: PostData -> Async<unit> ) =
-    let m_Event = new Event<PostData>()
-
-    do
-        m_Event.Publish
-        |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(time) )
-        |> Observable.subscribe ( func >> Async.Start )
-        |> ignore 
-
-    member this.ReCashOneWordHints (x) = m_Event.Trigger(x)
-
-
 module  FSharpIntellisence  =
     open Util
-
 
     let jsonStrings (fsc:FSharpChecker) (postData:PostData) (nameSpace: string [] )  (word:string) : string =
         asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
@@ -226,6 +216,8 @@ module  FSharpIntellisence  =
         // Do not use Array.Parallel.iter because too late !
         [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
         |> Array.iter ( fun (s:string) -> dic.GetOrAdd ( s, jsonStrings fsc postData [|s|] "" ) |> ignore )
+
+        dic.GetOrAdd( "DotHints" , jsonSerializer.PickleToString( { word = "" ; info = [[""]] } ) ) |> ignore
 
         dic.GetOrAdd( "OneWordHint" , jsonStrings fsc postData [||] "" ) |> ignore 
     }
@@ -245,9 +237,7 @@ module  FSharpIntellisence  =
             then    x
             else    dic.Item("OneWordHint")
         ) |> ignore
-
     }
-
 
     let dotHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData)  : string =
         let arr = nameSpaceArray postData.Line
@@ -259,7 +249,6 @@ module  FSharpIntellisence  =
             |> Array.fold ( fun state x ->
                 let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
                 state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
-
 
     let oneWordHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
         try
@@ -286,51 +275,17 @@ module  FSharpIntellisence  =
            if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
            then  attributeHints dic  ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
            else  oneWordHints   dic  ( Array.last ary )
-    
-
-    let public intellisense (fsc:FSharpChecker) ( dic : ConcurrentDictionary<string,string> ) ( gen : Generator )  (ctx: HttpContext) : string =
- 
-        let postData:PostData = {
-            Row      = extractJson ctx "row"
-            Col      = extractJson ctx "col"
-            Line     = extractJson ctx "line"
-            FilePath = extractJson ctx "filePath"
-            Source   = extractJson ctx "source" }
-
-        if      Seq.isEmpty dic.Keys
-        then    asyncInit fsc dic postData   |> Async.RunSynchronously
-        elif    dic.Item( "filePath" ) <> postData.FilePath
-        then    asyncReInit fsc dic postData |> Async.Start 
-
-        if      postData.Line.Contains(".")
-        then    dotHints fsc dic postData 
-        else    gen.ReCashOneWordHints postData
-                oneWordOrAttributeHints dic postData
-
-        
-
 
 
 //----------------------------------------------------------------------------
 // Suave
 //
-
-// type Generator2( time:float, f: HttpContext -> string)  =
-//     let m_Event = new Event<_>()
-//
-//     do
-//         m_Event.Publish
-//         |> Observable.throttle  ( System.TimeSpan.FromMilliseconds(time) )
-//         |> Observable.add ( f >> ignore ) 
-//
-//     member this.Intellisense (x:HttpContext) : string =
-//         m_Event.Trigger(x)
-        
                 
 module private Suave =
 
     open FsharpInteractive
     open FSharpIntellisence
+    open Util
 
     let private evalScript (fsi:Fsi) =
 
@@ -354,20 +309,36 @@ module private Suave =
     let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) ( gen : Generator ) =
         
         POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
-            
-            // OK ( gen2.Intellisense ctx ) ctx )
-            OK (intellisense fsc dic gen ctx ) ctx )
+
+            let postData:PostData = {
+                Row      = extractJson ctx "row"
+                Col      = extractJson ctx "col"
+                Line     = extractJson ctx "line"
+                FilePath = extractJson ctx "filePath"
+                Source   = extractJson ctx "source"
+            }
+
+            if      Seq.isEmpty dic.Keys
+            then    asyncInit fsc dic postData   |> Async.RunSynchronously
+            elif    dic.Item( "filePath" ) <> postData.FilePath
+            then    asyncReInit fsc dic postData |> Async.Start
+
+            if      postData.Line.Contains(".")
+            then    OK (dotHints fsc dic postData ) ctx
+            else    gen.ReCashOneWordHints postData
+                    OK ( oneWordOrAttributeHints dic postData ) ctx
+        )
 
     let private app (fsiPath:string) =
 
-        let fsi = Fsi(fsiPath)
-        let fsc = FSharpChecker.Create()
+        let fsi  = Fsi(fsiPath)
+        let fsc  = FSharpChecker.Create()
+        let sb   = new StringBuilder("")
         let dic : ConcurrentDictionary<string,string> = new ConcurrentDictionary< string, string >()
-        let gen  = new Generator(2000., asyncReOneWordHints fsc dic)
-        // let gen2 = new Generator2(200., intellisense fsc dic gen)
+        let gen  = new Generator(1500.,  asyncReOneWordHints fsc dic)
 
         choose [ evalScript    fsi
-                 autoComplete  fsc dic gen 
+                 autoComplete  fsc dic gen
                  NOT_FOUND     "Resource not found." ]
 
     [<EntryPointAttribute>]
