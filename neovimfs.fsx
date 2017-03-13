@@ -349,6 +349,11 @@ module private Suave =
     [<EntryPointAttribute>]
     let private main argv =
         let fsiPath = argv.[0]
-        startWebServer defaultConfig (app fsiPath)
-        0
 
+        let config = {
+            defaultConfig with
+                maxOps = 1
+        }
+
+        startWebServer config ( app fsiPath )
+        0
