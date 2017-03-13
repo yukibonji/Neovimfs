@@ -309,24 +309,29 @@ module private Suave =
     let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) ( gen : Generator ) =
         
         POST >=> path "/autoComplete" >=> ( fun (ctx: HttpContext) ->
+            try
+                let postData:PostData = {
+                    Row      = extractJson ctx "row"
+                    Col      = extractJson ctx "col"
+                    Line     = extractJson ctx "line"
+                    FilePath = extractJson ctx "filePath"
+                    Source   = extractJson ctx "source"
+                }
 
-            let postData:PostData = {
-                Row      = extractJson ctx "row"
-                Col      = extractJson ctx "col"
-                Line     = extractJson ctx "line"
-                FilePath = extractJson ctx "filePath"
-                Source   = extractJson ctx "source"
-            }
+                if      Seq.isEmpty dic.Keys
+                then    asyncInit fsc dic postData   |> Async.RunSynchronously
+                elif    dic.Item( "filePath" ) <> postData.FilePath
+                then    asyncReInit fsc dic postData |> Async.Start
 
-            if      Seq.isEmpty dic.Keys
-            then    asyncInit fsc dic postData   |> Async.RunSynchronously
-            elif    dic.Item( "filePath" ) <> postData.FilePath
-            then    asyncReInit fsc dic postData |> Async.Start
-
-            if      postData.Line.Contains(".")
-            then    OK (dotHints fsc dic postData ) ctx
-            else    gen.ReCashOneWordHints postData
-                    OK ( oneWordOrAttributeHints dic postData ) ctx
+                if      postData.Line.Contains(".")
+                then    OK (dotHints fsc dic postData ) ctx
+                else    gen.ReCashOneWordHints postData
+                        OK ( oneWordOrAttributeHints dic postData ) ctx
+            with
+                | :? System.ArgumentException ->
+                    let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
+                    let s = jsonSerializer.PickleToString( { word="fsc error"; info=[[""]] } )
+                    OK s ctx 
         )
 
     let private app (fsiPath:string) =
