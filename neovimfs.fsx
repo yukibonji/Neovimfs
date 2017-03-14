@@ -328,9 +328,9 @@ module private Suave =
                 else    gen.ReCashOneWordHints postData
                         OK ( oneWordOrAttributeHints dic postData ) ctx
             with
-                | :? System.ArgumentException ->
+                | :? System.ArgumentException as ex ->
                     let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
-                    let s = jsonSerializer.PickleToString( { word="fsc error"; info=[[""]] } )
+                    let s = jsonSerializer.PickleToString( { word = "ERROR: " + ex.Message  ; info=[[""]] } )
                     OK s ctx 
         )
 
