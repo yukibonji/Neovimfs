@@ -205,10 +205,15 @@ module  FSharpIntellisence  =
     open Util
 
     let jsonStrings (fsc:FSharpChecker) (postData:PostData) (nameSpace: string [] )  (word:string) : string =
-        asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
-        |> Array.fold ( fun state x ->
-            let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-            state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+        try
+            asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
+            |> Array.fold ( fun state x ->
+                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+        with
+            | :? System.ArgumentException as ex ->
+                let s = jsonSerializer.PickleToString( { word = "(jsonStrings): " + ex.Message  ; info=[[""]] } )
+                s
 
     let asyncInit (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
         dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore 
@@ -229,26 +234,41 @@ module  FSharpIntellisence  =
     }
 
     let asyncReOneWordHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
-        
-        let x = jsonStrings fsc postData [||] ""
+        try 
+            let x = jsonStrings fsc postData [||] ""
 
-        dic.AddOrUpdate( "OneWordHint", x , fun key existingVal ->
-            if      x <> existingVal
-            then    x
-            else    dic.Item("OneWordHint")
-        ) |> ignore
+            dic.AddOrUpdate( "OneWordHint", x , fun key existingVal ->
+                if      x <> existingVal
+                then    x
+                else    dic.Item("OneWordHint")
+            ) |> ignore
+        with
+            | :? System.ArgumentException as ex ->
+                let s = jsonSerializer.PickleToString( { word = "(dotHints_Cash): " + ex.Message  ; info=[[""]] } )
+                dic.GetOrAdd( "OneWordHint", s ) |> ignore
     }
 
     let dotHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData)  : string =
         let arr = nameSpaceArray postData.Line
         match Array.last arr with
         | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
-            dic.Item( Array.last arr )
+            try 
+                dic.Item( Array.last arr )
+            with
+                | :? System.ArgumentException as ex ->
+                    let s = jsonSerializer.PickleToString( { word = "(dotHints_Cash): " + ex.Message  ; info=[[""]] } )
+                    s
         | _ ->
-            asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
-            |> Array.fold ( fun state x ->
-                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+            try
+                asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
+                |> Array.fold ( fun state x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
+            with
+                | :? System.ArgumentException as ex ->
+                    let s = jsonSerializer.PickleToString( { word = "(dotHints): " + ex.Message  ; info=[[""]] } )
+                    s
+
 
     let oneWordHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
         try
@@ -257,7 +277,9 @@ module  FSharpIntellisence  =
             |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
             |> Array.reduce ( fun a b -> a + "\n" + b )
         with
-            | :? System.ArgumentException -> "" 
+            | :? System.ArgumentException as ex ->
+                let s = jsonSerializer.PickleToString( { word = "(OneWordHint): " + ex.Message  ; info=[[""]] } )
+                s
 
     let attributeHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
         try
@@ -266,7 +288,9 @@ module  FSharpIntellisence  =
             |> Array.filter ( fun str -> str.Contains("Attribute") )
             |> Array.reduce ( fun a b -> a + "\n" + b )
         with
-            | :? System.ArgumentException -> ""
+            | :? System.ArgumentException as ex ->
+                let s = jsonSerializer.PickleToString( { word = "(attributeHints): " + ex.Message  ; info=[[""]] } )
+                s
 
     let oneWordOrAttributeHints (dic:ConcurrentDictionary<string,string>) (postData:PostData) : string =
         postData.Line.Split(' ')
