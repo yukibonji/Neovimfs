@@ -334,6 +334,20 @@ module private Suave =
                     OK s ctx 
         )
 
+    let errorAction = 
+        fun _ -> async { return failwith "Uncaught exception!!" }
+
+    let customErrorHandler ex msg ctx =
+        let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
+        let s = jsonSerializer.PickleToString( { word = msg; info=[[""]] } )
+        OK s ctx
+
+    let config = {
+        defaultConfig with
+            maxOps = 1
+            errorHandler = customErrorHandler
+    }
+
     let private app (fsiPath:string) =
 
         let fsi  = Fsi(fsiPath)
@@ -344,16 +358,11 @@ module private Suave =
 
         choose [ evalScript    fsi
                  autoComplete  fsc dic gen
+                 GET >=> path "/error" >=> errorAction
                  NOT_FOUND     "Resource not found." ]
 
     [<EntryPointAttribute>]
     let private main argv =
         let fsiPath = argv.[0]
-
-        let config = {
-            defaultConfig with
-                maxOps = 1
-        }
-
         startWebServer config ( app fsiPath )
         0
