@@ -83,39 +83,40 @@ module private FsharpInteractive =
 
 
         member public this.EvalScript (fp:string) : unit =
+            try
+                let fp = System.Web.HttpUtility.UrlDecode(fp)
+                let result, warnings = fsiSession.EvalScriptNonThrowing fp
 
-            let fp = System.Web.HttpUtility.UrlDecode(fp)
-            let result, warnings = fsiSession.EvalScriptNonThrowing fp
+                sbOut.Clear() |> ignore
+                sbErr.Clear() |> ignore
 
-            sbOut.Clear() |> ignore
-            sbErr.Clear() |> ignore
+                match result with
+                | Choice1Of2 ()  -> ()
+                | Choice2Of2 exn ->
 
-            match result with
-            | Choice1Of2 ()  -> ()
-            | Choice2Of2 exn ->
+                    exn.Message + "\n" |> stdout.WriteLine
 
-                exn.Message + "\n" |> stdout.WriteLine
+                    warnings
+                    |> Array.map ( fun w ->
 
-                warnings
-                |> Array.map ( fun w ->
+                        let severity = match w.Severity with
+                                       | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Error   -> "error"
+                                       | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Warning -> "warning"
 
-                    let severity = match w.Severity with
-                                   | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Error   -> "error"
-                                   | Microsoft.FSharp.Compiler.FSharpErrorSeverity.Warning -> "warning"
+                        "("          +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
+                             +  " "  +  w.Subcategory
+                             +  " "  +  severity
+                             +  " "  +  "error:" + System.String.Format( "FS{0:0000}" , w.ErrorNumber )
+                             +  "\n" +  (orikaeshi w.Message 65)
+                             +  "\n"
+                        )
 
-                    "("          +  string w.StartLineAlternate + "-" + string w.StartColumn + ")"
-                         +  " "  +  w.Subcategory
-                         +  " "  +  severity
-                         +  " "  +  "error:" + System.String.Format( "FS{0:0000}" , w.ErrorNumber )
-                         +  "\n" +  (orikaeshi w.Message 65)
-                         +  "\n"
-                    )
-
-                |> Array.sort
-                |> Array.distinct
-                |> Array.iter ( fun s -> stdout.WriteLine(s) )
-
-                
+                    |> Array.sort
+                    |> Array.distinct
+                    |> Array.iter ( fun s -> stdout.WriteLine(s) )
+            with
+                | :? System.ArgumentException as ex ->
+                    stdout.WriteLine("FSI_ES: " + ex.Message )
 
 
 
@@ -124,7 +125,7 @@ module private FsharpInteractive =
 //
 
 type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source:string }
-
+type JsonOuter  = { header:string; data: string }
 type JsonFormat = { word : string; info: string list list  }
 
 type Generator( time:float, func: PostData -> Async<unit> ) =
@@ -206,15 +207,17 @@ module  FSharpIntellisence  =
 
     let jsonStrings (fsc:FSharpChecker) (postData:PostData) (nameSpace: string [] )  (word:string) : string =
         try
-            asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
-            |> Array.fold ( fun state x ->
-                let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
-        with
-            | :? System.ArgumentException as ex ->
-                let s = jsonSerializer.PickleToString( { word = "(jsonStrings): " + ex.Message  ; info=[[""]] } )
-                s
+            let tmp =
+                asyncGetDeclarationListInfo fsc postData ( nameSpace, word ) |> Async.RunSynchronously |> fun x -> x.Items
+                |> Array.fold ( fun state x ->
+                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
+                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
 
+            jsonSerializer.PickleToString( {header = "jsonStrings"; data = tmp.TrimEnd() })
+        
+        with e ->
+            jsonSerializer.PickleToString( { header = "jsonStrings err" ; data = "(js err): " + e.Message } )
+    
     let asyncInit (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
         dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore 
 
@@ -222,7 +225,7 @@ module  FSharpIntellisence  =
         [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
         |> Array.iter ( fun (s:string) -> dic.GetOrAdd ( s, jsonStrings fsc postData [|s|] "" ) |> ignore )
 
-        dic.GetOrAdd( "DotHints" , jsonSerializer.PickleToString( { word = "" ; info = [[""]] } ) ) |> ignore
+        dic.GetOrAdd( "DotHints" , jsonSerializer.PickleToString( {header="DotHints";data=""}  ) ) |> ignore
 
         dic.GetOrAdd( "OneWordHint" , jsonStrings fsc postData [||] "" ) |> ignore 
     }
@@ -242,10 +245,9 @@ module  FSharpIntellisence  =
                 then    x
                 else    dic.Item("OneWordHint")
             ) |> ignore
-        with
-            | :? System.ArgumentException as ex ->
-                let s = jsonSerializer.PickleToString( { word = "(dotHints_Cash): " + ex.Message  ; info=[[""]] } )
-                dic.GetOrAdd( "OneWordHint", s ) |> ignore
+
+        with e ->
+            jsonSerializer.PickleToString( { header = "asyncReOneWordHints err" ; data = "(aReOneword err): " + e.Message } ) |> ignore
     }
 
     let dotHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData)  : string =
@@ -254,43 +256,47 @@ module  FSharpIntellisence  =
         | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
             try 
                 dic.Item( Array.last arr )
-            with
-                | :? System.ArgumentException as ex ->
-                    let s = jsonSerializer.PickleToString( { word = "(dotHints_Cash): " + ex.Message  ; info=[[""]] } )
-                    s
+            with e ->
+                jsonSerializer.PickleToString( { header = "aaa" ; data = "(dotHints_cash err): " + e.Message } )
         | _ ->
             try
-                asyncGetDeclarationListInfo fsc postData ( arr ,"" ) |> Async.RunSynchronously |> fun x -> x.Items
-                |> Array.fold ( fun state x ->
-                    let dt : JsonFormat = { word = x.Name; info = match x.DescriptionText with FSharpToolTipText xs -> List.map extractGroupTexts xs }
-                    state + "\n" + jsonSerializer.PickleToString( dt ) ) ""
-            with
-                | :? System.ArgumentException as ex ->
-                    let s = jsonSerializer.PickleToString( { word = "(dotHints): " + ex.Message  ; info=[[""]] } )
-                    s
+                jsonStrings fsc postData arr ""
+            with e ->
+                jsonSerializer.PickleToString( { header = "aaa" ; data = "(dotHints err): " + e.Message } )
+
+    
 
 
     let oneWordHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
         try
-            dic.Item( "OneWordHint" )
-            |> fun str -> str.Split('\n')
-            |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
-            |> Array.reduce ( fun a b -> a + "\n" + b )
-        with
-            | :? System.ArgumentException as ex ->
-                let s = jsonSerializer.PickleToString( { word = "(OneWordHint): " + ex.Message  ; info=[[""]] } )
-                s
+            let js = JsonConvert.DeserializeObject<JsonOuter>(dic.Item( "OneWordHint" ))
+            
+            let tmp =
+                js.data
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+
+            jsonSerializer.PickleToString( {header = "oneWordHints"; data = tmp.TrimEnd() })
+
+        with e ->
+            jsonSerializer.PickleToString( { header = "aaa" ; data = "(oneWord err): " + e.Message } )
+
 
     let attributeHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
         try
-            dic.Item( "OneWordHint" )
-            |> fun str -> str.Split('\n')
-            |> Array.filter ( fun str -> str.Contains("Attribute") )
-            |> Array.reduce ( fun a b -> a + "\n" + b )
-        with
-            | :? System.ArgumentException as ex ->
-                let s = jsonSerializer.PickleToString( { word = "(attributeHints): " + ex.Message  ; info=[[""]] } )
-                s
+            let js = JsonConvert.DeserializeObject<JsonOuter>(dic.Item( "OneWordHint" ))
+            
+            let tmp =
+                js.data
+                |> fun str -> str.Split('\n')
+                |> Array.filter ( fun str -> str.Contains("Attribute") )
+                |> Array.reduce ( fun a b -> a + "\n" + b )
+
+            jsonSerializer.PickleToString( {header = "attributeHints"; data = tmp.TrimEnd() })
+
+        with e ->
+            jsonSerializer.PickleToString( { header = "aaa" ; data = "(attr err): " + e.Message } )
 
     let oneWordOrAttributeHints (dic:ConcurrentDictionary<string,string>) (postData:PostData) : string =
         postData.Line.Split(' ')
@@ -299,6 +305,7 @@ module  FSharpIntellisence  =
            if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
            then  attributeHints dic  ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
            else  oneWordHints   dic  ( Array.last ary )
+
 
 
 //----------------------------------------------------------------------------
@@ -314,21 +321,25 @@ module private Suave =
     let private evalScript (fsi:Fsi) =
 
         GET >=> pathScan "/evalScript/%s" ( fun fp ->
+            try
+                // switch stdout to memory stream
+                use ms = new MemoryStream()
+                use sw = new StreamWriter(ms)
+                use tw = TextWriter.Synchronized(sw)
 
-            // switch stdout to memory stream
-            use ms = new MemoryStream()
-            use sw = new StreamWriter(ms)
-            use tw = TextWriter.Synchronized(sw)
+                sw.AutoFlush <- true
+                Console.SetOut(tw)
 
-            sw.AutoFlush <- true
-            Console.SetOut(tw)
+                fsi.EvalScript(fp) |> ignore
 
-            fsi.EvalScript(fp) |> ignore
+                use sr = new System.IO.StreamReader(ms)
+                ms.Position <- int64 0
 
-            use sr = new System.IO.StreamReader(ms)
-            ms.Position <- int64 0
-
-            OK ( sr.ReadToEnd() ) )
+                OK ( sr.ReadToEnd() ) 
+            with
+                | :? System.ArgumentException as ex ->
+                    OK ( "(FSI: )" + ex.Message )
+        )
 
     let private autoComplete (fsc:FSharpChecker) ( dic :ConcurrentDictionary<string,string> ) ( gen : Generator ) =
         
@@ -351,11 +362,10 @@ module private Suave =
                 then    OK (dotHints fsc dic postData ) ctx
                 else    gen.ReCashOneWordHints postData
                         OK ( oneWordOrAttributeHints dic postData ) ctx
-            with
-                | :? System.ArgumentException as ex ->
-                    let jsonSerializer:JsonSerializer = FsPickler.CreateJsonSerializer(indent = false, omitHeader = true) 
-                    let s = jsonSerializer.PickleToString( { word = "ERROR: " + ex.Message  ; info=[[""]] } )
-                    OK s ctx 
+                    
+            with e ->
+                let s = jsonSerializer.PickleToString( { header = "aaa" ; data = "(err): " + e.Message } )
+                OK s ctx 
         )
 
     let errorAction = 
