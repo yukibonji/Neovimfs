@@ -1,5 +1,5 @@
 // ===========================================================================
-//  FILE    : deopletetfs.fsx
+//  FILE    : deopletefs.fsx
 //  AUTHOR  : callmekohei <callmekohei at gmail.com>
 //  License : MIT license
 // ===========================================================================
