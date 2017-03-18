@@ -29,14 +29,6 @@ open Newtonsoft.Json
 open MBrace.FsPickler
 open MBrace.FsPickler.Json
 
-// #r @"./packages/Suave/lib/net40/Suave.dll"
-// open Suave
-// open Suave.Operators
-// open Suave.Successful
-// open Suave.Filters
-// open Suave.RequestErrors
-
-
 
 type PostData   = { Row:string; Col:string; Line:string; FilePath:string; Source:string }
 type JsonOuter  = { header:string; data: string }
