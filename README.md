@@ -1,4 +1,4 @@
-#Neovimfs
+# Neovimfs
 
 Neovimfs is that Fsi and intellisense works on Suave server.
 
@@ -6,17 +6,17 @@ Neovimfs is that Fsi and intellisense works on Suave server.
 
 ![alt text](./pic/suave.png)
 
-###Install
+### Install
 ```
 $ git clone https://github.com/callmekohei/Neovimfs
 ```
 
-###How to use
+### How to use
 01. compile `neovimfs.fsx`
 02. mono `neovimfs.exe` `/path/to/fsi.exe`
 03. access port8080
 
-###Terminate neovimfs.exe
+### Terminate neovimfs.exe
 ```
 // check suave server pid
 $ lsof -i :8080
@@ -31,9 +31,9 @@ $ kill (pid)
 
 ---
 
-#Noevimfs with Neovim
+# Noevimfs with Neovim
 
-###Neovim configuration
+### Neovim configuration
 init.vim
 ```vim
 autocmd BufRead,BufNewFile *.fsx set filetype=fsharp
@@ -41,8 +41,8 @@ autocmd BufRead,BufNewFile *.fsx set filetype=fsharp
 
 <br>
 
-###QuickRun with Neovimfs
-
+### QuickRun with Neovimfs
+ 
 ![alt text](./pic/quickrun2.png)
 
 
@@ -79,7 +79,7 @@ let g:quickrun_config = {
 
 <br>
 
-###Intellisense completion with Neovimfs
+### Intellisense completion with Neovimfs
 
 dot hint  
 
@@ -117,7 +117,7 @@ let g:deoplete#auto_complete_delay=0
 
 <br>
 
-###Syntax highlight of FSharp
+### Syntax highlight of FSharp
 
 ![alt text](./pic/syntax.png)
 
@@ -138,5 +138,5 @@ $ wget https://raw.githubusercontent.com/fsharp/vim-fsharp/master/syntax/fsharp.
 <br>
 
 
-###LICENCE
+### LICENCE
 The MIT License (MIT)
