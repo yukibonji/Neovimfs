@@ -93,12 +93,19 @@ module private Suave =
                     Source   = extractJson ctx "source"
                 }
 
+                // stdout.WriteLine( "neovimfs: " + postData.Line )
+                
                 if      Seq.isEmpty dic.Keys
                 then    asyncInit fsc dic postData   |> Async.RunSynchronously
                 elif    dic.Item( "filePath" ) <> postData.FilePath
                 then    asyncReInit fsc dic postData |> Async.Start
 
-                if      postData.Line.Contains(".")
+                if
+                        postData.Line.Split(' ')
+                        |> Array.filter ( fun s -> s <> "" )
+                        |> Array.last
+                        |> fun s -> s.Contains(".")
+                
                 then    OK (dotHints fsc dic postData ) ctx
                 else    gen.ReCashOneWordHints postData
                         OK ( oneWordOrAttributeHints dic postData ) ctx

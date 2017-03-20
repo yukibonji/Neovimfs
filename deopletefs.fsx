@@ -171,13 +171,16 @@ module  FSharpIntellisence  =
 
 
     let oneWordHints (dic:ConcurrentDictionary<string,string>)  (s:string) : string =
+        
+        let s1 = s.Replace("typeof<","")
+
         try
             let js = JsonConvert.DeserializeObject<JsonOuter>(dic.Item( "OneWordHint" ))
             
             let tmp =
                 js.data
                 |> fun str -> str.Split('\n')
-                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s.ToLower() + ".*" ))
+                |> Array.filter ( fun str -> Regex.IsMatch( str.ToLower() , "(?<={\"word\":\")" + s1.ToLower() + ".*" ))
                 |> Array.reduce ( fun a b -> a + "\n" + b )
 
             jsonSerializer.PickleToString( {header = "oneWordHints"; data = tmp.TrimEnd() })
@@ -207,7 +210,7 @@ module  FSharpIntellisence  =
         |> fun ary ->
            if    Array.contains "[<" ary  && not ( Array.contains ">]" ary )
            then  attributeHints dic  ( Array.last ary |> fun s -> s.Replace( "[<","" ) )
-           else  oneWordHints   dic  ( Array.last ary )
+           else  oneWordHints   dic  ( Array.last ary  )
 
 
 
