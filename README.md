@@ -113,6 +113,8 @@ let g:deoplete#enable_at_startup = 1
 let g:deoplete#max_list = 250
 set previewheight=5
 let g:deoplete#auto_complete_delay=0
+let g:deoplete#auto_refresh_delay=0
+let g:deoplete#enable_ignore_case=1
 ```
 
 <br>
