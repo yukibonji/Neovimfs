@@ -125,7 +125,7 @@ module  FSharpIntellisence  =
         dic.GetOrAdd( "filePath" , postData.FilePath ) |> ignore 
 
         // Do not use Array.Parallel.iter because too late !
-        [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" |]
+        [|"System" ; "List" ; "Set" ; "Seq" ; "Array" ; "Map" ; "Option" ; "Observable" |]
         |> Array.iter ( fun (s:string) -> dic.GetOrAdd ( s, jsonStrings fsc postData [|s|] "" ) |> ignore )
 
         dic.GetOrAdd( "DotHints" , jsonSerializer.PickleToString( {header="DotHints";data=""}  ) ) |> ignore
@@ -134,9 +134,10 @@ module  FSharpIntellisence  =
     }
 
     let asyncReInit (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
-        dic.TryUpdate( "filePath"   , postData.FilePath                        , dic.Item("filePath")    ) |> ignore
-        dic.TryUpdate( "System"     , jsonStrings fsc postData [|"System"|] "" , dic.Item("System")      ) |> ignore 
-        dic.TryUpdate( "OneWordHint", jsonStrings fsc postData [||] ""         , dic.Item("OneWordHint") ) |> ignore 
+        dic.TryUpdate( "filePath"   , postData.FilePath                            , dic.Item("filePath")    ) |> ignore
+        dic.TryUpdate( "System"     , jsonStrings fsc postData [|"System"|] ""     , dic.Item("System")      ) |> ignore 
+        dic.TryUpdate( "Observable" , jsonStrings fsc postData [|"Observable"|] "" , dic.Item("Observable")  ) |> ignore 
+        dic.TryUpdate( "OneWordHint", jsonStrings fsc postData [||] ""             , dic.Item("OneWordHint") ) |> ignore 
     }
 
     let asyncReOneWordHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData) : Async<unit> = async {
@@ -156,7 +157,7 @@ module  FSharpIntellisence  =
     let dotHints (fsc:FSharpChecker) (dic:ConcurrentDictionary<string,string>) (postData:PostData)  : string =
         let arr = nameSpaceArray postData.Line
         match Array.last arr with
-        | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" ->
+        | "System" | "List" | "Set" | "Seq" | "Array" | "Map" | "Option" | "Observable" ->
             try 
                 dic.Item( Array.last arr )
             with e ->
